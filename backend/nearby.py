@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import hashlib
 import atexit
+import copy
 from datetime import datetime, timezone
+from concurrent.futures import Future, TimeoutError as FutureTimeoutError
 import math
 import os
 import re
@@ -20,8 +22,10 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import unicodedata
 from collections import OrderedDict, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -65,10 +69,28 @@ MAX_VIEWPORT_SPAN = 0.15
 GRID_DEGREES = 0.01
 SNAP_LIMIT_M = 50.0
 ATTRIBUTION = "© OpenStreetMap contributors"
+WORKER_REQUEST_TIMEOUT_SECONDS = 35.0
+WORKER_ADMISSION_WAIT_SECONDS = 0.75
+WORKER_MAX_ADMITTED_REQUESTS = 8
+WORKER_RESPONSE_CACHE_TTL_SECONDS = 20.0
+WORKER_RESPONSE_CACHE_MAXSIZE = 128
+WORKER_RESPONSE_CACHE_REVISION = 1
+MAX_SINGLEFLIGHT_WAITERS = 16
 
 _LOCK = threading.RLock()
-_QUEUE = threading.BoundedSemaphore(3)
+_QUEUE = threading.BoundedSemaphore(WORKER_MAX_ADMITTED_REQUESTS)
 _WORKER: subprocess.Popen[str] | None = None
+_RESPONSE_CACHE_LOCK = threading.Lock()
+_RESPONSE_CACHE: OrderedDict[tuple[Any, ...], tuple[float, dict[str, Any]]] = OrderedDict()
+
+
+@dataclass
+class _WorkerFlight:
+    future: Future[dict[str, Any]]
+    waiters: int = 0
+
+
+_WORKER_INFLIGHT: dict[tuple[Any, ...], _WorkerFlight] = {}
 
 
 def _terminate_worker() -> None:
@@ -132,60 +154,143 @@ def _observed_not_future(value: Any) -> bool:
         return False
 
 
+def _worker_cache_key(request: dict[str, Any]) -> tuple[Any, ...]:
+    encoded_request = json.dumps(request, ensure_ascii=False, sort_keys=True,
+                                 separators=(",", ":"), allow_nan=False)
+    return (WORKER_RESPONSE_CACHE_REVISION, ROUTING_POLICY_REVISION,
+            _input_signature(), encoded_request)
+
+
 def _worker_request(request: dict[str, Any]) -> dict[str, Any]:
-    global _WORKER
-    if not _QUEUE.acquire(timeout=0.1):
-        raise RuntimeError("local nearby worker queue is busy")
-    if not _LOCK.acquire(timeout=35.0):
-        _QUEUE.release()
-        raise RuntimeError("local nearby worker queue timed out")
-    try:
-        if _WORKER is None or _WORKER.poll() is not None:
-            _terminate_worker()
-            if not GEO_PYTHON.is_file():
-                raise RuntimeError("local geodata Python environment is missing")
-            # The local workstation uses rtk; a production image supplies its
-            # geodata Python explicitly and has no workstation command proxy.
-            configured_python = os.environ.get("NOVOSTROY_GEODATA_PYTHON")
-            if configured_python:
-                command = [str(GEO_PYTHON), "-u", "-m", "backend.nearby", "--worker"]
-            else:
-                rtk = shutil.which("rtk")
-                if rtk is None:
-                    raise RuntimeError("rtk command proxy is missing")
-                command = [rtk, "proxy", str(GEO_PYTHON), "-u", "-m", "backend.nearby", "--worker"]
-            _WORKER = subprocess.Popen(
-                command,
-                cwd=ROOT,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                bufsize=1,
-                start_new_session=True,
-            )
-        assert _WORKER.stdin is not None and _WORKER.stdout is not None
+    """Use a short-lived snapshot-bound cache and coalesce identical requests.
+
+    This front door runs before admission control so browser views requesting
+    the same point can share one result without occupying worker queue slots.
+    Returned values are copied so a caller cannot mutate the cached response.
+    """
+    deadline = time.monotonic() + WORKER_REQUEST_TIMEOUT_SECONDS
+    key = _worker_cache_key(request)
+    now = time.monotonic()
+    owner = False
+    with _RESPONSE_CACHE_LOCK:
+        cached = _RESPONSE_CACHE.get(key)
+        if cached is not None:
+            expires_at, value = cached
+            if expires_at > now:
+                _RESPONSE_CACHE.move_to_end(key)
+                return copy.deepcopy(value)
+            _RESPONSE_CACHE.pop(key, None)
+
+        flight = _WORKER_INFLIGHT.get(key)
+        if flight is None:
+            flight = _WorkerFlight(Future())
+            _WORKER_INFLIGHT[key] = flight
+            owner = True
+        elif flight.waiters >= MAX_SINGLEFLIGHT_WAITERS:
+            raise RuntimeError("local nearby worker queue is busy")
+        else:
+            flight.waiters += 1
+
+    if not owner:
         try:
-            _WORKER.stdin.write(json.dumps(request, ensure_ascii=False, separators=(",", ":")) + "\n")
-            _WORKER.stdin.flush()
-            readable, _, _ = select.select([_WORKER.stdout], [], [], 30.0)
-            if not readable:
-                _terminate_worker()
-                raise RuntimeError("local nearby worker timed out")
-            line = _WORKER.stdout.readline()
-            if not line:
-                _terminate_worker()
-                raise RuntimeError("local nearby worker exited")
-            result = json.loads(line)
-        except (BrokenPipeError, OSError, json.JSONDecodeError) as exc:
-            _terminate_worker()
-            raise RuntimeError("local nearby worker failed") from exc
-        if result.get("error"):
-            raise RuntimeError(str(result["error"]))
-        return result
+            remaining = max(0.0, deadline - time.monotonic())
+            return copy.deepcopy(flight.future.result(timeout=remaining))
+        except FutureTimeoutError as exc:
+            raise RuntimeError("local nearby worker timed out") from exc
+        finally:
+            with _RESPONSE_CACHE_LOCK:
+                flight.waiters = max(0, flight.waiters - 1)
+
+    try:
+        result = _worker_exchange(request, deadline)
+        if not isinstance(result, dict):
+            raise RuntimeError("local nearby worker returned an invalid result")
+        stored = copy.deepcopy(result)
+        with _RESPONSE_CACHE_LOCK:
+            _RESPONSE_CACHE[key] = (
+                time.monotonic() + WORKER_RESPONSE_CACHE_TTL_SECONDS, stored)
+            _RESPONSE_CACHE.move_to_end(key)
+            while len(_RESPONSE_CACHE) > WORKER_RESPONSE_CACHE_MAXSIZE:
+                _RESPONSE_CACHE.popitem(last=False)
+            flight.future.set_result(stored)
+        return copy.deepcopy(stored)
+    except BaseException as exc:
+        with _RESPONSE_CACHE_LOCK:
+            if not flight.future.done():
+                flight.future.set_exception(exc)
+        raise
     finally:
-        _LOCK.release()
+        with _RESPONSE_CACHE_LOCK:
+            if _WORKER_INFLIGHT.get(key) is flight:
+                _WORKER_INFLIGHT.pop(key, None)
+
+
+def _worker_exchange(request: dict[str, Any], deadline: float) -> dict[str, Any]:
+    """Admit bounded work, then serialize access to the single geodata child."""
+    remaining = max(0.0, deadline - time.monotonic())
+    admission_wait = min(WORKER_ADMISSION_WAIT_SECONDS, remaining)
+    if not _QUEUE.acquire(timeout=admission_wait):
+        raise RuntimeError("local nearby worker queue is busy")
+    locked = False
+    try:
+        remaining = max(0.0, deadline - time.monotonic())
+        if remaining <= 0 or not _LOCK.acquire(timeout=remaining):
+            raise RuntimeError("local nearby worker timed out")
+        locked = True
+        return _worker_exchange_locked(request, deadline)
+    finally:
+        if locked:
+            _LOCK.release()
         _QUEUE.release()
+
+
+def _worker_exchange_locked(request: dict[str, Any], deadline: float) -> dict[str, Any]:
+    """Send one request to the worker; caller holds ``_LOCK``."""
+    global _WORKER
+    if _WORKER is None or _WORKER.poll() is not None:
+        _terminate_worker()
+        if not GEO_PYTHON.is_file():
+            raise RuntimeError("local geodata Python environment is missing")
+        # The local workstation uses rtk; a production image supplies its
+        # geodata Python explicitly and has no workstation command proxy.
+        configured_python = os.environ.get("NOVOSTROY_GEODATA_PYTHON")
+        if configured_python:
+            command = [str(GEO_PYTHON), "-u", "-m", "backend.nearby", "--worker"]
+        else:
+            rtk = shutil.which("rtk")
+            if rtk is None:
+                raise RuntimeError("rtk command proxy is missing")
+            command = [rtk, "proxy", str(GEO_PYTHON), "-u", "-m", "backend.nearby", "--worker"]
+        _WORKER = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+            start_new_session=True,
+        )
+    assert _WORKER.stdin is not None and _WORKER.stdout is not None
+    try:
+        _WORKER.stdin.write(json.dumps(request, ensure_ascii=False, separators=(",", ":")) + "\n")
+        _WORKER.stdin.flush()
+        remaining = max(0.0, deadline - time.monotonic())
+        readable, _, _ = select.select([_WORKER.stdout], [], [], remaining)
+        if not readable:
+            _terminate_worker()
+            raise RuntimeError("local nearby worker timed out")
+        line = _WORKER.stdout.readline()
+        if not line:
+            _terminate_worker()
+            raise RuntimeError("local nearby worker exited")
+        result = json.loads(line)
+    except (BrokenPipeError, OSError, json.JSONDecodeError) as exc:
+        _terminate_worker()
+        raise RuntimeError("local nearby worker failed") from exc
+    if result.get("error"):
+        raise RuntimeError(str(result["error"]))
+    return result
 
 
 def nearby_for_point(

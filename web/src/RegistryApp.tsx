@@ -23,8 +23,9 @@ const snapshotDate = (value: string | null | undefined) => {
 }
 const validLocation = (item: RegistryBuilding): item is RegistryBuilding & { location: [number, number] } => item.location_quality === 'verified' && !!item.location && item.location.length === 2 && item.location.every(Number.isFinite)
 const kindLabel = (kind: string | null) => ({ multifamily: 'Многоквартирный дом', apartment_complex: 'Апартаментный комплекс', low_rise: 'Малоэтажный дом' })[kind ?? ''] ?? known(kind)
-const parkWalkCaption = (walk: DeveloperParkWalk | null, loading: boolean) => {
+const parkWalkCaption = (walk: DeveloperParkWalk | null, loading: boolean, failed = false) => {
   if (loading) return 'До парка: ищем пеший маршрут…'
+  if (failed) return 'Не удалось загрузить маршрут до парка'
   if (!walk || walk.status !== 'routed' || !Number.isFinite(walk.distance_m) || !Number.isFinite(walk.estimated_minutes)
     || walk.distance_m === null || walk.estimated_minutes === null || walk.distance_m < 0 || walk.estimated_minutes < 0) return 'До парка: пеший маршрут пока не подтверждён'
   return `${walk.park?.name ? `Парк «${walk.park.name}»` : 'Парк'}: ≈ ${number(Math.max(1, Math.ceil(walk.estimated_minutes)))} мин пешком · ≈ ${number(walk.distance_m)} м по маршруту до границы. Вход не подтверждён.`
@@ -45,7 +46,7 @@ function WalkFilter({ id, label, value, onChange }: { id: string; label: string;
   return <div className="filter-field"><label htmlFor={id}>{label}</label><select id={id} value={value} onChange={(event) => onChange(event.target.value)}><option value="">Без ограничения</option>{WALK_LIMITS.map((minutes) => <option key={minutes} value={minutes}>До {minutes} мин</option>)}</select></div>
 }
 
-function BuildingCard({ item, selected, onSelect, developerMode, parkCaption }: { item: RegistryBuilding; selected: boolean; onSelect: () => void; developerMode: boolean; parkCaption?: string }) {
+function BuildingCard({ item, selected, onSelect, developerMode, parkCaption, parkError, onRetryPark }: { item: RegistryBuilding; selected: boolean; onSelect: () => void; developerMode: boolean; parkCaption?: string; parkError?: boolean; onRetryPark?: () => void }) {
   const projectMedia = developerMode ? item.media?.find((media) => media.scope === 'project_gallery_single_corpus' && media.role === 'facade_photo')
     ?? item.media?.find((media) => media.scope === 'project_gallery' || media.scope === 'project_gallery_single_corpus') : null
   return <article className={`registry-card ${selected ? 'selected' : ''}`} data-testid={`building-${item.registry_id}`}>
@@ -56,9 +57,10 @@ function BuildingCard({ item, selected, onSelect, developerMode, parkCaption }: 
       <span className="registry-card-address"><MapPin size={14} /> {known(item.address)}{developerMode && item.address_complete === false ? ' · частичный адрес' : ''}</span>
       {developerMode ? <span className="registry-card-source-facts"><span>ЖК: {known(item.complex_label)}</span><span>Застройщик: {known(item.developer_name)}</span><span>Округ: {item.okrug_name || '—'} · район: {item.district_name || '—'}</span><span>Индекс шума: {noiseCaption(item.noise_index)} · Внутренняя оценка платформы</span><span>Воздух: {airQualityCaption(item.air_quality)}</span>{item.matching_units_count != null && <span>Квартир, подходящих под фильтры: {number(item.matching_units_count)}</span>}</span>
         : <span className="registry-card-facts"><span><small>Статус по выгрузке</small><b>{known(item.status)}</b></span><span><small>Срок сдачи по выгрузке</small><b>{known(item.handover)}</b></span><span><small>Этажность</small><b>{item.floors == null ? 'Не указана' : `${item.floors} эт.`}</b></span></span>}
-      {parkCaption && <span className="registry-card-park">{parkCaption}</span>}
+      {parkCaption && !parkError && <span className="registry-card-park">{parkCaption}</span>}
       <span className="registry-card-foot"><span>{validLocation(item) ? 'Точка корпуса подтверждена' : 'Точка корпуса не подтверждена'}</span><span>Сведения: {snapshotDate(developerMode ? item.observed_at : item.latest_known_date)}</span></span>
     </button>
+    {parkError && <div className="registry-card-park registry-card-park-error" role="status"><span>{parkCaption}</span><button type="button" onClick={onRetryPark}>Повторить</button></div>}
   </article>
 }
 
@@ -92,6 +94,8 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const [selectedModel, setSelectedModel] = useState<DeveloperModel | null>(null)
   const [parkWalk, setParkWalk] = useState<DeveloperParkWalk | null>(null)
   const [parkWalkLoading, setParkWalkLoading] = useState(false)
+  const [parkWalkErrorId, setParkWalkErrorId] = useState<string | null>(null)
+  const [parkRetry, setParkRetry] = useState(0)
   const [selectedModelVisible, setSelectedModelVisible] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [expandGroupsNear, setExpandGroupsNear] = useState(true)
@@ -178,6 +182,7 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const parkRegistryId = developerMode ? selected?.registry_id ?? null : null
   useEffect(() => {
     setParkWalk(null)
+    setParkWalkErrorId(null)
     if (!active || view !== 'catalog' || !parkRegistryId) { setParkWalkLoading(false); return }
     const controller = new AbortController()
     setParkWalkLoading(true)
@@ -189,10 +194,10 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
         throw new RegistrySnapshotChanged('Пеший маршрут и дом относятся к разным снимкам.')
       }
       setParkWalk(value)
-    }).catch(() => { if (!controller.signal.aborted) setParkWalk(null) })
+    }).catch(() => { if (!controller.signal.aborted) { setParkWalk(null); setParkWalkErrorId(parkRegistryId) } })
       .finally(() => { if (!controller.signal.aborted) setParkWalkLoading(false) })
     return () => controller.abort()
-  }, [active, view, parkRegistryId, health.registry_snapshot_id, health.map_run_id, health.unit_run_id, health.enrichment_run_id])
+  }, [active, view, parkRegistryId, parkRetry, health.registry_snapshot_id, health.map_run_id, health.unit_run_id, health.enrichment_run_id])
   const viewportLayers = NEARBY_CATEGORIES.filter((layer) => nearbyVisibility[layer])
   const viewportLayersKey = viewportLayers.join(',')
   const activeNearbyKey = nearbyPointId && nearbySnapshot && nearbyMapRun
@@ -369,8 +374,10 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const activeUnitFilterSummary = developerMode ? [developerUnitFilterSummary(applied),
     applied.okrug_id ? `округ ${list?.facets?.okrugs?.find((okrug) => okrug.id === applied.okrug_id)?.name ?? selected?.okrug_name ?? 'выбранный'}` : null,
     applied.max_noise_index !== undefined ? `индекс шума до ${applied.max_noise_index} из 100` : null].filter(Boolean).join(' · ') || null : null
+  const selectedParkError = !!selected && parkWalkErrorId === selected.registry_id
   const selectedParkCaption = developerMode && selected
-    ? parkWalkCaption(parkWalk?.registry_id === selected.registry_id ? parkWalk : null, parkWalkLoading) : null
+    ? parkWalkCaption(parkWalk?.registry_id === selected.registry_id ? parkWalk : null, parkWalkLoading, selectedParkError) : null
+  const retryParkWalk = () => setParkRetry((value) => value + 1)
   const viewportData = activeViewportKey && viewportResult?.key === activeViewportKey ? viewportResult.data : null
   const nearbyItems = useMemo(() => nearbyPointId ? shownNearbyItems(nearbyData, nearbyVisibility)
     : NEARBY_CATEGORIES.flatMap((layer) => nearbyVisibility[layer]
@@ -406,7 +413,7 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
           </div>}
         </form>
         {error && <div className="error-card" role="alert"><strong>Не удалось загрузить данные</strong><p>{error}</p><button onClick={() => { if (snapshotStale) window.location.reload(); else { activeAbort.current?.abort(); const controller = new AbortController(); activeAbort.current = controller; void reload(applied, controller.signal, ++requestId.current) } }}><RefreshCw size={15} /> {snapshotStale ? 'Обновить страницу' : 'Повторить'}</button></div>}
-        <div className="sidebar-content"><section className="results">{selected && !selectedPoint && <p className="nearby-no-origin">Для этой записи нет подтверждённой точки. Объекты рядом и пешие маршруты не рассчитаны.</p>}<div className="section-heading"><div><span className="section-kicker">{selected ? 'ЗАПИСЬ РЕЕСТРА' : developerMode ? 'ДОМА ИЗ КАТАЛОГА КВАРТИР' : 'КАТАЛОГ ЗДАНИЙ'}</span><h2>{selected ? selected.name : developerMode ? 'Дома с найденными квартирами' : 'Новостройки и корпуса'}</h2></div><span className="count-badge">{selected ? 1 : list ? `${number(list.items.length)} из ${number(list.records_total)}` : '—'}</span></div>{selected ? <div className="registry-selection-note"><span>{developerMode ? 'Текущее наличие и цены не подтверждены' : 'Цены и квартиры не представлены'}</span>{developerMode && <button type="button" className="developer-explorer-launch" data-testid="open-developer-explorer" onClick={(event) => openDeveloperExplorer(selected, event.currentTarget)}>Этажи и квартиры</button>}{!developerMode && <a href={`/models?decision=&registry_id=${encodeURIComponent(selected.registry_id)}`} onClick={(event) => { if (onModels && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onModels(selected.registry_id) } }}>Проверить модели</a>}<button onClick={closeSelection} aria-label="Показать все здания"><X size={16} /></button></div> : points && <p className="result-count-note">На карте {number(points.counts.points)} записей с координатами{unlocated !== null ? `; ${number(unlocated)} записей реестра без подтверждённой точки` : ''}. {developerMode ? 'Точки относятся только к подтверждённым корпусам из этого снимка.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p>}{loading ? <div className="loading-list" role="status">Загружаем здания…<span className="loading-bar" /></div> : shown.length ? <div className="registry-list">{shown.map((item) => <BuildingCard key={item.registry_id} item={item} selected={selected?.registry_id === item.registry_id} onSelect={() => select(item)} developerMode={developerMode} parkCaption={selected?.registry_id === item.registry_id ? selectedParkCaption ?? undefined : undefined} />)}{!selected && list && list.items.length < list.records_total && <button className="registry-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button>}</div> : <div className="empty-state"><Compass size={29} /><strong>Здания в реестре не найдены</strong><p>Измените запрос или фильтры. {developerMode ? 'На карте нет других корпусов для этого запроса.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p><button className="primary-button" onClick={clear}>Сбросить фильтры</button></div>}</section></div>
+        <div className="sidebar-content"><section className="results">{selected && !selectedPoint && <p className="nearby-no-origin">Для этой записи нет подтверждённой точки. Объекты рядом и пешие маршруты не рассчитаны.</p>}<div className="section-heading"><div><span className="section-kicker">{selected ? 'ЗАПИСЬ РЕЕСТРА' : developerMode ? 'ДОМА ИЗ КАТАЛОГА КВАРТИР' : 'КАТАЛОГ ЗДАНИЙ'}</span><h2>{selected ? selected.name : developerMode ? 'Дома с найденными квартирами' : 'Новостройки и корпуса'}</h2></div><span className="count-badge">{selected ? 1 : list ? `${number(list.items.length)} из ${number(list.records_total)}` : '—'}</span></div>{selected ? <div className="registry-selection-note"><span>{developerMode ? 'Текущее наличие и цены не подтверждены' : 'Цены и квартиры не представлены'}</span>{developerMode && <button type="button" className="developer-explorer-launch" data-testid="open-developer-explorer" onClick={(event) => openDeveloperExplorer(selected, event.currentTarget)}>Этажи и квартиры</button>}{!developerMode && <a href={`/models?decision=&registry_id=${encodeURIComponent(selected.registry_id)}`} onClick={(event) => { if (onModels && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onModels(selected.registry_id) } }}>Проверить модели</a>}<button onClick={closeSelection} aria-label="Показать все здания"><X size={16} /></button></div> : points && <p className="result-count-note">На карте {number(points.counts.points)} записей с координатами{unlocated !== null ? `; ${number(unlocated)} записей реестра без подтверждённой точки` : ''}. {developerMode ? 'Точки относятся только к подтверждённым корпусам из этого снимка.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p>}{loading ? <div className="loading-list" role="status">Загружаем здания…<span className="loading-bar" /></div> : shown.length ? <div className="registry-list">{shown.map((item) => <BuildingCard key={item.registry_id} item={item} selected={selected?.registry_id === item.registry_id} onSelect={() => select(item)} developerMode={developerMode} parkCaption={selected?.registry_id === item.registry_id ? selectedParkCaption ?? undefined : undefined} parkError={selected?.registry_id === item.registry_id && selectedParkError} onRetryPark={retryParkWalk} />)}{!selected && list && list.items.length < list.records_total && <button className="registry-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button>}</div> : <div className="empty-state"><Compass size={29} /><strong>Здания в реестре не найдены</strong><p>Измените запрос или фильтры. {developerMode ? 'На карте нет других корпусов для этого запроса.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p><button className="primary-button" onClick={clear}>Сбросить фильтры</button></div>}</section></div>
       </aside>
       <main className={`map-column ${mobilePanel === 'results' ? 'mobile-hide' : ''}${developerMode ? ' developer-map-mode' : ''}${selectedPoint || selectedGroup ? ' has-map-selection' : ''}`}>
         <MapView data={mapData} selectedId={selectedMarkerId} selectionRequestId={selectionRequestId} focusOnSelection={focusOnSelection} visible={mapVisible} selectedModel={selectedMarkerId && selectedModel?.registry_id === modelRegistryId ? selectedModel : null} onSelectedModelVisible={setSelectedModelVisible}
@@ -429,7 +436,7 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
             {point.point_type !== 'mapped_construction' ? <button type="button" onClick={(event) => openRegistryPoint(point, point.point_type === 'developer_building', event.currentTarget)}>{point.point_type === 'developer_building' ? 'Этажи и квартиры' : 'Сведения'}</button>
               : <a href={`/models?decision=ready&candidate=${encodeURIComponent(point.candidate_id)}`} onClick={(event) => { if (onModels && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onModels(undefined, point.candidate_id) } }}>Оценка модели</a>}
           </div>)}</div>
-          {selectedParkCaption && <div className="map-point-park-summary" role="status">{selectedParkCaption}</div>}
+          {selectedParkCaption && <div className={`map-point-park-summary${selectedParkError ? ' map-point-park-error' : ''}`} role="status"><span>{selectedParkCaption}</span>{selectedParkError && <button type="button" onClick={retryParkWalk}>Повторить</button>}</div>}
           {coincident.length > 1 && <p>Совпадение координат не подтверждает, что записи относятся к одному корпусу.</p>}
         </div>}
         <div className="map-bottom-note">{mapStatus && <span className="map-error">{mapStatus}</span>}<details className="map-credit-disclosure"><summary>© OpenStreetMap · Overture · источники</summary><div>{[...new Set([...(map?.tilesets.map((item) => item.attribution).filter(Boolean) ?? []), ...(points?.counts.mapped_construction_points ? [points.mapped_attribution] : []), nearbyData?.attribution, parkWalk && parkWalk.registry_id === selected?.registry_id ? parkWalk.attribution : null, viewportData?.attribution].filter((value): value is string => Boolean(value)))].join(' · ') || 'Схематичная визуализация зданий'}</div></details><span>Снимок: {snapshotDate(points?.checked_at ?? map?.snapshot_at ?? health.snapshot_at)}</span></div>

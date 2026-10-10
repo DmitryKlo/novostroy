@@ -6,6 +6,42 @@ const floorFive = fixture.floors.sections.flatMap((section: { floors: { floor_nu
   .find((floor: { floor_number: number }) => floor.floor_number === 5)
 if (!floorFive) throw new Error('Sanitized fixture has no fifth floor')
 
+test('park route load error has one manual retry and stays distinct from unavailable route', async ({ page }, testInfo) => {
+  const health = await (await page.request.get('/v1/health')).json()
+  let attempts = 0
+  await page.route(`**/v1/developer-buildings/${registryId}/park-walk`, (route) => {
+    attempts += 1
+    if (attempts === 1) return route.fulfill({ status: 503, json: { detail: 'busy' } })
+    const identity = { registry_snapshot_id: health.registry_snapshot_id, map_run_id: health.map_run_id,
+      unit_run_id: health.unit_run_id, enrichment_run_id: health.enrichment_run_id ?? null, registry_id: registryId }
+    return route.fulfill({ json: attempts === 2
+      ? { ...identity, status: 'routed', park: { id: 'park_nevsky', name: 'Невский парк' }, distance_m: 849,
+        estimated_minutes: 11, geometry: [[37.6, 55.7], [37.61, 55.71]], approximate: true,
+        endpoint_basis: 'pedestrian_graph_near_park_boundary', boundary_gap_m: 13, access_verified: false,
+        origin_access: null, osm_snapshot_at: '2026-10-10', attribution: '© OpenStreetMap contributors' }
+      : { ...identity, status: 'unavailable', park: null, distance_m: null, estimated_minutes: null,
+        geometry: null, approximate: true, endpoint_basis: null, boundary_gap_m: null, access_verified: false,
+        origin_access: null, osm_snapshot_at: '2026-10-10', attribution: '© OpenStreetMap contributors' } })
+  })
+  await page.goto('/')
+  await page.getByRole('textbox', { name: 'Поиск зданий' }).fill('Лэйк')
+  await page.getByRole('button', { name: 'Найти здания' }).click()
+  const card = page.getByTestId(`building-${registryId}`)
+  await card.waitFor()
+  await card.locator('button').first().click()
+  await expect(page.locator('.map-point-park-error')).toContainText('Не удалось загрузить маршрут до парка')
+  await expect(card.locator('.registry-card-park-error')).toContainText('Не удалось загрузить маршрут до парка')
+  await page.locator('.map-point-park-error').getByRole('button', { name: 'Повторить' }).click()
+  await expect(page.locator('.map-point-park-summary')).toContainText('Невский парк')
+  expect(attempts).toBe(2)
+  await page.getByRole('button', { name: 'Закрыть сведения о точке' }).click()
+  if (testInfo.project.name === 'mobile') await page.getByRole('tab', { name: 'Здания' }).click()
+  await card.locator('button').first().click()
+  await expect(page.locator('.map-point-park-summary')).toContainText('пеший маршрут пока не подтверждён')
+  await expect(page.locator('.map-point-park-summary').getByRole('button', { name: 'Повторить' })).toHaveCount(0)
+  expect(attempts).toBe(3)
+})
+
 test('selected house, floor and apartment have one-step Escape navigation and focus return', async ({ page }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))

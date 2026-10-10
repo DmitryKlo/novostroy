@@ -21,6 +21,7 @@ CHECKS: tuple[tuple[str, tuple[str, ...], int], ...] = (
         "backend/tests/test_developer_units_api.py",
         "backend/tests/test_developer_models_api.py",
         "backend/tests/test_developer_media_cache.py", "backend/tests/test_park_walk.py",
+        "backend/tests/test_nearby_worker.py",
         "backend/tests/test_developer_enrichment_api.py",
         "backend/test_nearby.py::NearbyTests::test_verified_oms_prefers_routed_candidate_over_closer_unknown",
         "backend/test_nearby.py::NearbyTests::test_routed_candidates_precede_closer_unknown_and_unknown_fills_only_open_slot",
