@@ -35,6 +35,7 @@
 .developer-media-unavailable{display:grid;place-items:center;min-height:90px;padding:12px;color:#758878;background:#edf1eb;font-size:10px;text-align:center}
 .developer-media-unavailable button{margin-top:8px;border:1px solid #cddacf;border-radius:6px;background:#fffefa;color:#466b4e;padding:6px 10px;font-size:10px;font-weight:800}
 .map-bottom-note{position:relative}.map-credit-disclosure{min-width:0;flex:1}.map-credit-disclosure summary{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;list-style:none;font-weight:700}.map-credit-disclosure summary::-webkit-details-marker{display:none}.map-credit-disclosure[open]>div{position:absolute;z-index:20;bottom:calc(100% + 5px);left:10px;right:10px;max-height:min(40vh,240px);overflow:auto;white-space:normal;overflow-wrap:anywhere;padding:10px 12px;border:1px solid #dfe6dc;border-radius:7px;background:#fffefa;box-shadow:0 6px 22px #2637282b;color:#4b6551;font-size:10px;line-height:1.5}.map-credit-disclosure summary:focus-visible{outline:2px solid #b8795e;outline-offset:2px}
+.registry-app .map-bottom-note{overflow:visible;z-index:11}
 .main-nav a.nav-link{text-decoration:none}.registry-filters-panel>.filter-field{grid-column:auto}.registry-filters-panel>.registry-floors-field,.registry-filters-panel>.filter-buttons,.registry-filter-scope,.registry-filter-coverage,.registry-filter-error,.registry-unavailable,.registry-walk-scope{grid-column:1/-1}.registry-filter-scope,.registry-filter-coverage,.registry-unavailable,.registry-walk-scope{font-size:10px;line-height:1.5;color:#718173;margin:0}.registry-filter-scope{font-weight:700;color:#516653}.registry-walk-scope{font-weight:800;color:#516653;border-top:1px solid #e7e9e1;padding-top:8px}.registry-filter-error{margin:0;color:#a24c35;font-size:10px;font-weight:700}.registry-unavailable{border-top:1px solid #e7e9e1;padding-top:9px}.registry-unavailable summary{cursor:pointer;font-weight:800;color:#846a57}.registry-unavailable p{margin:6px 0 0}.sidebar-intro .registry-visibility-note{font-size:10px;line-height:1.5;color:#785f4b;background:#f5eee2;border:1px solid #eadfcb;border-radius:7px;padding:8px 10px;margin-top:10px}
 .registry-filters-panel>.registry-district-field{grid-column:1/-1}.registry-app .map-point-card-head>strong,.registry-app .map-point-card-item>span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:700px){.registry-app .map-point-card{max-height:min(24dvh,190px)}.registry-app .nearby-panel{max-height:min(30dvh,250px)}}
@@ -72,7 +73,7 @@
   .registry-app .nearby-panel-compact .nearby-heading small{display:none}
   .registry-app .nearby-expand{display:inline-flex;margin-left:auto;min-height:28px;align-items:center;border:1px solid #d6e0d2;border-radius:6px;background:#f7faf5;color:#3b6046;padding:4px 9px;font-size:10px;font-weight:800}
   .registry-app .nearby-heading{align-items:center}
-  .registry-app .map-bottom-note{min-height:30px;max-height:30px;overflow:hidden;white-space:nowrap}
+  .registry-app .map-bottom-note{min-height:30px;max-height:30px;overflow:visible;white-space:nowrap}
   .registry-app .map-bottom-note>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .registry-app .map-bottom-note>span:last-child{flex:none}
 }
