@@ -39,6 +39,7 @@ SNAPSHOT_PATH_RE = re.compile(
     r"data/property/estateline/normalized/snapshots/estate-[0-9a-f]{16}\Z")
 UNIT_RUN_RE = re.compile(r"developer-units-v1-[0-9a-f]{16}\Z")
 SELECTED_MODEL_RUN_RE = re.compile(r"developer-models-v1-[0-9a-f]{16}\Z")
+ENRICHMENT_RUN_RE = re.compile(r"developer-enrichment-v1-[0-9a-f]{16}\Z")
 
 
 def _release_json(release: Path, relative: str, hashes: dict[str, str]) -> dict[str, Any]:
@@ -447,11 +448,14 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
     """Require one coherent, non-demo building/map generation after deployment."""
     run_id = health.get("map_run_id")
     unit_run_id = health.get("unit_run_id")
+    enrichment_run_id = health.get("enrichment_run_id")
     snapshot_id = health.get("registry_snapshot_id")
     if (health.get("data_mode") != "real" or health.get("catalog_view") != "developer_buildings"
             or health.get("status") != "developer_buildings_ready"
             or not isinstance(run_id, str) or DEVELOPER_RUN_RE.fullmatch(run_id) is None
             or not isinstance(unit_run_id, str) or UNIT_RUN_RE.fullmatch(unit_run_id) is None
+            or (enrichment_run_id is not None and (not isinstance(enrichment_run_id, str)
+                or ENRICHMENT_RUN_RE.fullmatch(enrichment_run_id) is None))
             or not isinstance(snapshot_id, str) or not snapshot_id):
         raise RuntimeError("Proxy health did not select a ready real developer-building map")
     total = buildings.get("dataset_total")
@@ -460,6 +464,7 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or buildings.get("snapshot_id") != snapshot_id
             or buildings.get("map_run_id") != run_id
             or buildings.get("unit_run_id") != unit_run_id
+            or buildings.get("enrichment_run_id") != enrichment_run_id
             or not isinstance(total, int) or total < 1
             or buildings.get("source_total") != total
             or buildings.get("archived_total") != 0
@@ -472,6 +477,7 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or points.get("registry_snapshot_id") != snapshot_id
             or points.get("map_run_id") != run_id
             or points.get("unit_run_id") != unit_run_id
+            or points.get("enrichment_run_id") != enrichment_run_id
             or points.get("dataset_total") != total
             or not isinstance(counts, dict) or not isinstance(items, list)
             or counts.get("points") != len(items)
@@ -488,8 +494,11 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or len(items) != mapped
             or any(item.get("point_type") != "developer_building" for item in items)):
         raise RuntimeError("Developer map points do not match the active building list")
-    return {"map_run_id": run_id, "unit_run_id": unit_run_id,
-            "buildings": total, "points": mapped}
+    result = {"map_run_id": run_id, "unit_run_id": unit_run_id,
+              "buildings": total, "points": mapped}
+    if enrichment_run_id is not None:
+        result["enrichment_run_id"] = enrichment_run_id
+    return result
 
 
 def verify_experience_payloads(verified: dict[str, int | str],
@@ -497,13 +506,24 @@ def verify_experience_payloads(verified: dict[str, int | str],
                                model: dict[str, Any], pointer: dict[str, Any]) -> None:
     """Confirm that selected menu/model routes use one committed experience."""
     snapshot_id = pointer.get("map_snapshot_id")
+    version = pointer.get("schema_version")
+    enrichment_run_id = pointer.get("enrichment_run_id")
+    if version == "developer-experience-pointer/2":
+        manifest_sha = pointer.get("enrichment_manifest_sha256")
+        if (not isinstance(enrichment_run_id, str)
+                or ENRICHMENT_RUN_RE.fullmatch(enrichment_run_id) is None
+                or not isinstance(manifest_sha, str) or HASH_RE.fullmatch(manifest_sha) is None):
+            raise RuntimeError("Invalid pinned developer enrichment generation")
+    elif version != "developer-experience-pointer/1" or enrichment_run_id is not None:
+        raise RuntimeError("Invalid developer experience pointer schema")
     common = {"registry_snapshot_id": snapshot_id,
               "map_run_id": verified["map_run_id"],
               "unit_run_id": verified["unit_run_id"],
+              "enrichment_run_id": enrichment_run_id,
               "registry_id": building_id}
-    if (pointer.get("schema_version") != "developer-experience-pointer/1"
-            or pointer.get("map_run_id") != verified["map_run_id"]
+    if (pointer.get("map_run_id") != verified["map_run_id"]
             or pointer.get("unit_run_id") != verified["unit_run_id"]
+            or verified.get("enrichment_run_id") != enrichment_run_id
             or any(floors.get(key) != value or model.get(key) != value
                    for key, value in common.items())
             or model.get("model_run_id") != pointer.get("model_run_id")

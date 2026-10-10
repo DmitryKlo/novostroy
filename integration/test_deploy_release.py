@@ -250,6 +250,62 @@ class DeployReleaseTests(unittest.TestCase):
                 verified, selected_id, common,
                 {**model, "model_run_id": "developer-models-v1-" + "0" * 16}, pointer)
 
+    def test_actual_smoke_chain_accepts_v2_and_rejects_mixed_enrichment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            release = fixture_release(Path(temporary))
+            pointer_path = release / "data/property/developer_experience/active.json"
+            pointer = json.loads(pointer_path.read_text())
+            enrichment = "developer-enrichment-v1-" + "9" * 16
+            pointer.update(schema_version="developer-experience-pointer/2",
+                           enrichment_run_id=enrichment, enrichment_manifest_sha256="8" * 64)
+            registry_id = "registry-" + "7" * 24
+            common = {"registry_snapshot_id": pointer["map_snapshot_id"],
+                      "map_run_id": pointer["map_run_id"], "unit_run_id": pointer["unit_run_id"],
+                      "enrichment_run_id": enrichment, "registry_id": registry_id}
+            responses = {
+                "/v1/health": {**common, "data_mode": "real", "catalog_view": "developer_buildings",
+                               "status": "developer_buildings_ready"},
+                "/v1/registry/buildings?limit=1": {**common, "dataset_id": "developer_building_registry",
+                    "snapshot_id": pointer["map_snapshot_id"], "dataset_total": 1, "source_total": 1,
+                    "archived_total": 0, "facets": {"map_eligible_count": 1},
+                    "items": [{"registry_id": registry_id}]},
+                "/v1/map/points": {**common, "dataset_id": "developer_map_points", "dataset_total": 1,
+                    "counts": {"points": 1, "developer_building_points": 1,
+                               "developer_building_points_total": 1, "unlocated_buildings": 0,
+                               "mapped_construction_points": 0},
+                    "group_evidence": {**common, "schema_version": 1, "visibility": "public", "groups": []},
+                    "items": [{"point_type": "developer_building"}]},
+                f"/v1/developer-buildings/{registry_id}/floors": dict(common),
+                f"/v1/developer-buildings/{registry_id}/model": {**common,
+                    "model_run_id": pointer["model_run_id"], "status": "unavailable", "asset_url": None},
+                "/v1/models/candidates/summary": {"run_status": "ready", "counts": {"scanned": 1}},
+            }
+            settings = {"NOVOSTROY_HTTP_PORT": "18080", "NOVOSTROY_RELEASE_DIR": str(release)}
+            def run_smoke(payloads: dict, active: dict) -> None:
+                pointer_path.write_text(json.dumps(active))
+                with patch.object(apply_release, "_read_json",
+                                  side_effect=lambda url: payloads[url.removeprefix("http://127.0.0.1:18080")]):
+                    apply_release._smoke(settings)
+            run_smoke(responses, pointer)
+            for endpoint in list(responses)[:-1]:
+                with self.subTest(endpoint=endpoint):
+                    mixed = json.loads(json.dumps(responses))
+                    mixed[endpoint]["enrichment_run_id"] = "developer-enrichment-v1-" + "0" * 16
+                    with self.assertRaises(RuntimeError):
+                        run_smoke(mixed, pointer)
+            for broken in ({**pointer, "enrichment_run_id": "invalid"},
+                           {**pointer, "enrichment_manifest_sha256": None},
+                           {**pointer, "schema_version": "developer-experience-pointer/3"},
+                           {**pointer, "schema_version": "developer-experience-pointer/1"}):
+                with self.subTest(pointer=broken), self.assertRaises(RuntimeError):
+                    run_smoke(responses, broken)
+            legacy = {key: value for key, value in pointer.items() if not key.startswith("enrichment_")}
+            legacy["schema_version"] = "developer-experience-pointer/1"
+            legacy_responses = json.loads(json.dumps(responses))
+            for row in legacy_responses.values():
+                row.pop("enrichment_run_id", None)
+            run_smoke(legacy_responses, legacy)
+
     def test_manifest_hashes_and_unlisted_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             release = fixture_release(Path(temporary))
