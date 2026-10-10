@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from backend import developer_enrichment as enrichment_reader
 from backend import developer_map as map_reader
 from backend import developer_models as model_reader
 from backend import developer_units as unit_reader
@@ -24,6 +25,7 @@ from sources.property.developer_map import (
 
 BASE = ROOT / "data/property/developer_experience"
 POINTER_SCHEMA = "developer-experience-pointer/1"
+POINTER_SCHEMA_V2 = "developer-experience-pointer/2"
 HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -39,7 +41,8 @@ def pointer_sha(base: Path = BASE) -> str:
 
 
 def _verify_bundle(map_run_id: str, unit_run_id: str,
-                   model_run_id: str) -> dict[str, Any]:
+                   model_run_id: str, *, enrichment_run_id: str | None = None,
+                   expected_enrichment_manifest_sha: str | None = None) -> dict[str, Any]:
     map_run = map_reader.resolve_active()
     if map_run is None or map_run["manifest"]["run_id"] != map_run_id:
         raise ValueError("Experience does not match active map generation")
@@ -57,17 +60,38 @@ def _verify_bundle(map_run_id: str, unit_run_id: str,
         unit_reader.asset_bytes(unit_run, sha)
     for sha in model_run["asset_shas"]:
         model_reader.asset_bytes(model_run, sha)
-    return {"schema_version": POINTER_SCHEMA,
+    pointer = {"schema_version": POINTER_SCHEMA,
             "map_run_id": map_run_id,
             "map_snapshot_id": map_run["manifest"]["snapshot_id"],
             "map_manifest_sha256": _file_sha(
                 map_reader.BASE / "runs" / map_run_id / "manifest.json"),
             "unit_run_id": unit_run_id, "unit_manifest_sha256": unit_sha,
             "model_run_id": model_run_id, "model_manifest_sha256": model_sha}
+    if enrichment_run_id is not None:
+        if (expected_enrichment_manifest_sha is None or
+                HASH_RE.fullmatch(expected_enrichment_manifest_sha) is None):
+            raise ValueError("Enrichment publication requires reviewed manifest SHA")
+        manifest_path = enrichment_reader.BASE / "runs" / enrichment_run_id / "manifest.json"
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            raise ValueError("Enrichment manifest unavailable")
+        enrichment_sha = _file_sha(manifest_path)
+        if enrichment_sha != expected_enrichment_manifest_sha:
+            raise ValueError("Enrichment manifest changed before publication")
+        enrichment_reader.load_staged(
+            enrichment_run_id, map_run, unit_run, model_run,
+            expected_manifest_sha256=enrichment_sha)
+        pointer.update({"schema_version": POINTER_SCHEMA_V2,
+                        "enrichment_run_id": enrichment_run_id,
+                        "enrichment_manifest_sha256": enrichment_sha})
+    elif expected_enrichment_manifest_sha is not None:
+        raise ValueError("Enrichment SHA supplied without a run")
+    return pointer
 
 
 def publish(map_run_id: str, unit_run_id: str, model_run_id: str, *,
-            expected_active_sha: str, base: Path = BASE) -> dict[str, Any]:
+            expected_active_sha: str, base: Path = BASE,
+            enrichment_run_id: str | None = None,
+            expected_enrichment_manifest_sha: str | None = None) -> dict[str, Any]:
     if HASH_RE.fullmatch(expected_active_sha) is None:
         raise ValueError("Publish requires exact prior pointer SHA")
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -77,7 +101,10 @@ def publish(map_run_id: str, unit_run_id: str, model_run_id: str, *,
         previous = _active_bytes(base)
         if _sha(previous or b"") != expected_active_sha:
             raise ValueError("Experience pointer changed before publish")
-        pointer = _verify_bundle(map_run_id, unit_run_id, model_run_id)
+        pointer = _verify_bundle(
+            map_run_id, unit_run_id, model_run_id,
+            enrichment_run_id=enrichment_run_id,
+            expected_enrichment_manifest_sha=expected_enrichment_manifest_sha)
         current = _canonical(pointer) + b"\n"
         if previous == current:
             return pointer
@@ -113,8 +140,10 @@ def rollback(*, expected_active_sha: str, base: Path = BASE) -> dict[str, Any] |
             (base / "active.json").unlink()
             _fsync_dir(base)
             return None
-        expected = _verify_bundle(prior["map_run_id"], prior["unit_run_id"],
-                                  prior["model_run_id"])
+        expected = _verify_bundle(
+            prior["map_run_id"], prior["unit_run_id"], prior["model_run_id"],
+            enrichment_run_id=prior.get("enrichment_run_id"),
+            expected_enrichment_manifest_sha=prior.get("enrichment_manifest_sha256"))
         if expected != prior:
             raise ValueError("Previous experience refs no longer validate")
         _atomic_private_json(base / "active.json", prior)
@@ -130,6 +159,8 @@ def main() -> None:
     publish_cmd.add_argument("--map-run-id", required=True)
     publish_cmd.add_argument("--unit-run-id", required=True)
     publish_cmd.add_argument("--model-run-id", required=True)
+    publish_cmd.add_argument("--enrichment-run-id")
+    publish_cmd.add_argument("--expected-enrichment-manifest-sha")
     publish_cmd.add_argument("--expected-active-sha", required=True)
     rollback_cmd = sub.add_parser("rollback")
     rollback_cmd.add_argument("--expected-active-sha", required=True)
@@ -139,8 +170,11 @@ def main() -> None:
         result: Any = {"active_pointer_sha256": _sha(raw or b""),
                        "active": json.loads(raw) if raw else None}
     elif args.command == "publish":
-        result = publish(args.map_run_id, args.unit_run_id, args.model_run_id,
-                         expected_active_sha=args.expected_active_sha, base=args.base)
+        result = publish(
+            args.map_run_id, args.unit_run_id, args.model_run_id,
+            expected_active_sha=args.expected_active_sha, base=args.base,
+            enrichment_run_id=args.enrichment_run_id,
+            expected_enrichment_manifest_sha=args.expected_enrichment_manifest_sha)
     else:
         result = rollback(expected_active_sha=args.expected_active_sha, base=args.base)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

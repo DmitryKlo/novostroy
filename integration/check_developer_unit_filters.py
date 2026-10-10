@@ -109,8 +109,50 @@ def main() -> None:
         status, invalid_units = await _asgi(units_route + "?area_min_m2=80&area_max_m2=40")
         assert status == 422 and invalid_units["detail"]["code"] == "invalid_request"
 
+        # Regression from the real first Yasenevsky, corpus 4 menu: the
+        # source has 20 apartments on floor 13, but none meets both the
+        # observed <=15m price and two-room constraints.
+        yasenevsky = "registry-df0c5887d92ea0335cdba75c"
+        assert yasenevsky in map_run["by_registry"]
+        house_filters = "price_max_rub=15000000&rooms=2"
+        status, house_units = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/units?{house_filters}&limit=100")
+        assert status == 200 and house_units["total"] == 9, house_units
+        _schema("DeveloperUnitsResult", house_units)
+        status, floors = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/floors?{house_filters}")
+        assert status == 200, floors
+        _schema("DeveloperFloorsResult", floors)
+        floor_rows = [floor for section in floors["sections"] for floor in section["floors"]]
+        assert sum(floor["unit_count"] for floor in floor_rows) == 9
+        assert floors["matching_units_total"] == 9
+        assert 13 not in {floor["floor_number"] for floor in floor_rows}
+        assert all(floor["unit_count"] == floor["matching_unit_count"]
+                   for floor in floor_rows)
+        floor_13 = next(floor for floor in menu["floors"].values()
+                        if floor["registry_id"] == yasenevsky
+                        and floor["floor_number"] == 13)
+        status, stale_floor = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/floors/{floor_13['floor_id']}?{house_filters}")
+        assert status == 404 and stale_floor["detail"]["code"] == "not_found"
+        stale_unit = next(row for row in menu["units_by_building"][yasenevsky]
+                          if row["floor_number"] == 13)
+        status, stale_detail = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/units/{stale_unit['unit_id']}?{house_filters}")
+        assert status == 404 and stale_detail["detail"]["code"] == "not_found"
+        bounded = house_filters + "&unit_floor_min=14&unit_floor_max=17"
+        status, bounded_floors = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/floors?{bounded}")
+        assert status == 200 and bounded_floors["matching_units_total"] == 4
+        assert {floor["floor_number"] for section in bounded_floors["sections"]
+                for floor in section["floors"]} == {14, 15, 17}
+        status, bounded_units = await _asgi(
+            f"/v1/developer-buildings/{yasenevsky}/units?{bounded}&limit=100")
+        assert status == 200 and bounded_units["total"] == 4
+        assert {row["floor_number"] for row in bounded_units["items"]} == {14, 15, 17}
+
     asyncio.run(check())
-    print("PASS developer apartment filters: one-unit AND, list/map/points/menu parity, pagination, reversed-range 422")
+    print("PASS developer apartment filters: one-unit AND, list/map/points/menu/floor parity, Yasenevsky floor regression, pagination, reversed-range 422")
 
 
 if __name__ == "__main__":

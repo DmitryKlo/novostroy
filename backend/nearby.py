@@ -54,7 +54,7 @@ ROUTE_POOL = 8
 ITEMS_PER_KIND = 2
 VERIFIED_ROUTE_POOL = 6
 METRO_ENTRANCE_ROUTE_POOL = 4
-ROUTING_POLICY_REVISION = "walk-no-ferry-2x2-v3-origin-access-metro-groups"
+ROUTING_POLICY_REVISION = "walk-no-ferry-2x2-v4-route-first-origin-access-metro-groups"
 METRO_LOCAL_IDENTITY_RADIUS_M = 25.0
 ORIGIN_ACCESS_LOCATE_RADIUS_M = 100.0
 ORIGIN_ACCESS_CONNECTOR_MAX_M = 100.0
@@ -205,6 +205,19 @@ def nearby_for_point(
         raise ValueError("origin_id must be a bounded opaque point ID")
     return _worker_request({"kind": "point", "lon": lon, "lat": lat,
                             "point_id": origin_id, "education": _education_filter(education)})
+
+
+def park_walk_for_point(lon: float, lat: float, *, origin_id: str) -> dict[str, Any]:
+    """Route from a current map point to a mapped park boundary approach.
+
+    The API caller must validate the opaque origin against the active map.
+    Park boundaries are route destinations, not asserted entrances.
+    """
+    lon, lat = _coordinates(lon, lat)
+    if not isinstance(origin_id, str) or not origin_id or len(origin_id) > 128:
+        raise ValueError("origin_id must be a bounded opaque point ID")
+    return _worker_request({"kind": "park", "lon": lon, "lat": lat,
+                            "point_id": origin_id})
 
 
 def nearby_in_viewport(
@@ -937,13 +950,8 @@ class NearbyIndex:
         unknown = sorted((pair for pair in evaluated if pair[1]["status"] != "routed"),
                          key=lambda pair: (pair[0]["straight_line_m"], pair[0]["id"]))
         selected = routed[:ITEMS_PER_KIND]
-        # If the closest mapped point cannot be routed, a farther routed
-        # candidate cannot prove that it is the nearest on foot. Retain one
-        # such point with an explicit unknown route instead of hiding it.
-        if unknown and (not routed or unknown[0][0]["straight_line_m"] < routed[0][1]["distance_m"]):
-            selected = [unknown[0], *routed[:ITEMS_PER_KIND - 1]]
         if len(selected) < ITEMS_PER_KIND:
-            selected.extend(pair for pair in unknown if pair not in selected)
+            selected.extend(unknown[:ITEMS_PER_KIND - len(selected)])
         selected = selected[:ITEMS_PER_KIND]
         basis = "walking_distance" if all(route["status"] == "routed" for _, route in selected) else \
             "walking_distance_with_unrouted_nearby"
@@ -1025,14 +1033,70 @@ class NearbyIndex:
             pair[0]["straight_line_m"], pair[0]["id"])) if verified_unknown else None
         nearest_verified_routed = min(verified_routed, key=lambda pair: (
             pair[1]["distance_m"], pair[0]["id"])) if verified_routed else None
-        verified_choice = (nearest_verified_unknown if nearest_verified_unknown and
-                           (not nearest_verified_routed or nearest_verified_unknown[0]["straight_line_m"]
-                            < nearest_verified_routed[1]["distance_m"]) else nearest_verified_routed)
+        # A routed verified clinic is more useful than a closer source point
+        # whose walking route is unknown. Fall back to the nearest unknown
+        # verified site only when this bounded verified pool has no routed one.
+        verified_choice = nearest_verified_routed or nearest_verified_unknown
         verified_oms_added_as_exception = False
-        if verified_choice and not any(row["osm_source_id"] in self.oms_records
-                                       for row, _ in medical_selected):
-            medical_selected = [*medical_selected[:ITEMS_PER_KIND - 1], verified_choice]
-            verified_oms_added_as_exception = True
+        if verified_choice:
+            selected_verified = [
+                (index, pair) for index, pair in enumerate(medical_selected)
+                if pair[0]["osm_source_id"] in self.oms_records
+                and self.oms_records[pair[0]["osm_source_id"]].get("osm_version")
+                == pair[0].get("osm_version")
+            ]
+            chosen_is_routed = verified_choice[1]["status"] == "routed"
+            selected_verified_routed = [
+                pair for _, pair in selected_verified if pair[1]["status"] == "routed"
+            ]
+            chosen_already_selected = any(
+                pair[0]["osm_source_id"] == verified_choice[0]["osm_source_id"]
+                for pair in medical_selected
+            )
+            replace_selected_oms = False
+            replace_index: int | None = None
+            if chosen_is_routed and not chosen_already_selected:
+                selected_unknown_oms = [
+                    (index, pair) for index, pair in selected_verified
+                    if pair[1]["status"] != "routed"
+                ]
+                if selected_unknown_oms:
+                    # An unknown route can only fill a slot for which this
+                    # bounded pool has no routed OMS candidate.
+                    replace_index = max(
+                        (index for index, _pair in selected_unknown_oms),
+                        key=lambda index: medical_selected[index][0]["straight_line_m"],
+                    )
+                    replace_selected_oms = True
+                elif selected_verified_routed:
+                    worst_selected_route = max(
+                        pair[1]["distance_m"] for pair in selected_verified_routed
+                    )
+                    replace_selected_oms = verified_choice[1]["distance_m"] < worst_selected_route
+                    if replace_selected_oms:
+                        replace_index = max(
+                            (index for index, pair in selected_verified
+                             if pair[1]["status"] == "routed"),
+                            key=lambda index: medical_selected[index][1]["distance_m"],
+                        )
+                elif selected_verified:
+                    # Upgrade an unrouted OMS row already filling a local slot.
+                    replace_index = selected_verified[0][0]
+                    replace_selected_oms = True
+                else:
+                    replace_selected_oms = True
+                    if len(medical_selected) >= ITEMS_PER_KIND:
+                        replace_index = len(medical_selected) - 1
+            elif not selected_verified:
+                replace_selected_oms = True
+                if len(medical_selected) >= ITEMS_PER_KIND:
+                    replace_index = len(medical_selected) - 1
+            if replace_selected_oms:
+                if replace_index is None:
+                    medical_selected.append(verified_choice)
+                else:
+                    medical_selected[replace_index] = verified_choice
+                verified_oms_added_as_exception = True
         verified_oms_present = any(
             row["osm_source_id"] in self.oms_records and
             self.oms_records[row["osm_source_id"]].get("osm_version") == row.get("osm_version")
@@ -1123,13 +1187,15 @@ def _sha256_file(path: Path) -> str:
 def _input_signature() -> tuple[str | int | None, ...]:
     paths = (POI_PATH, POI_MANIFEST, GRAPH_CONFIG, GRAPH_MANIFEST, OMS_SIDECAR,
              OMS_MANIFEST, METRO_SIDECAR, METRO_MANIFEST, ROADS_PATH, ROADS_MANIFEST,
-             WATER_PATH, WATERWAYS_PATH, SURFACES_MANIFEST)
+             WATER_PATH, WATERWAYS_PATH, SURFACES_MANIFEST,
+             ROOT / "data/social/osm_moscow_parks_261008_v2.parquet")
     return (datetime.now(timezone.utc).date().isoformat(),
             *(path.stat().st_mtime_ns if path.is_file() else None for path in paths))
 
 
 def _worker_main() -> int:
     index: NearbyIndex | None = None
+    park_index: Any = None
     loaded_signature: tuple[str | int | None, ...] | None = None
     for line in sys.stdin:
         try:
@@ -1137,6 +1203,7 @@ def _worker_main() -> int:
             signature = _input_signature()
             if index is None or signature != loaded_signature:
                 index = NearbyIndex.from_local_files()
+                park_index = None
                 loaded_signature = signature
             if request["kind"] == "point":
                 result = index.point(float(request["lon"]), float(request["lat"]),
@@ -1144,6 +1211,16 @@ def _worker_main() -> int:
             elif request["kind"] == "viewport":
                 result = index.viewport(tuple(request["bbox"]), layers=tuple(request["layers"]),
                                         education=request["education"], limit=request["limit"])
+            elif request["kind"] == "park":
+                from backend.park_walk import ParkIndex
+
+                if park_index is None:
+                    source = json.loads(POI_MANIFEST.read_text(encoding="utf-8"))["source"]
+                    park_index = ParkIndex.from_local_files(
+                        expected_source_sha256=source["sha256"])
+                result = park_index.walk(
+                    (float(request["lon"]), float(request["lat"])), index._route,
+                    index.barrier_lookup, dataset_id=index.dataset_id)
             else:
                 raise ValueError("unknown nearby request kind")
             print(json.dumps(result, ensure_ascii=False, separators=(",", ":")), flush=True)

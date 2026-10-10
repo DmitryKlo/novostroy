@@ -22,6 +22,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 COMPOSE = ROOT / "deploy/compose.yaml"
 IMAGE_REPOSITORIES = (
     "registry.spirit.culab.ru/hack-l2sh-2/novostroy-api",
@@ -205,10 +206,14 @@ def _verify_developer_experience(release: Path, hashes: dict[str, str]) -> None:
     """Pin map, unit menu, selected models and their assets with one pointer."""
     path = "data/property/developer_experience/active.json"
     pointer = _release_json(release, path, hashes)
-    if (set(pointer) != {"schema_version", "map_run_id", "map_snapshot_id",
+    keys = {"schema_version", "map_run_id", "map_snapshot_id",
                          "map_manifest_sha256", "unit_run_id", "unit_manifest_sha256",
                          "model_run_id", "model_manifest_sha256"}
-            or pointer.get("schema_version") != "developer-experience-pointer/1"):
+    version = pointer.get("schema_version")
+    if version == "developer-experience-pointer/2":
+        keys |= {"enrichment_run_id", "enrichment_manifest_sha256"}
+    if (set(pointer) != keys
+            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2"}):
         raise ValueError("Invalid unified developer experience pointer")
     map_run, map_snapshot = pointer.get("map_run_id"), pointer.get("map_snapshot_id")
     unit_run, model_run = pointer.get("unit_run_id"), pointer.get("model_run_id")
@@ -272,9 +277,13 @@ def _verify_developer_experience(release: Path, hashes: dict[str, str]) -> None:
             or model_manifest.get("assets_bytes") != selected_bytes):
         raise ValueError("Selected model assets differ from model manifest")
     for old_pointer in ("data/property/developer_units/active.json",
-                        "data/property/developer_models/active.json"):
+                        "data/property/developer_models/active.json",
+                        "data/property/developer_enrichment/active.json"):
         if old_pointer in hashes:
             raise ValueError("Release has a competing developer active pointer")
+    if version == "developer-experience-pointer/2":
+        from scripts.package_deploy_data import developer_enrichment_files
+        developer_enrichment_files(release, pointer, hashes)
 
 
 def _directory(path: Path) -> Path:
@@ -283,10 +292,13 @@ def _directory(path: Path) -> Path:
     return path.resolve(strict=True)
 
 
-def verify_release(release: Path) -> dict[str, Any]:
+def verify_release(release: Path, *, allow_legacy_missing_route_inputs: bool = False) -> dict[str, Any]:
     """Check the allowlisted export's file hashes before changing containers."""
     release = _directory(release)
     manifest_path = release / "release-manifest.json"
+    if (manifest_path.is_symlink() or not manifest_path.is_file()
+            or manifest_path.stat().st_size > 64_000_000):
+        raise ValueError("Release manifest is missing, linked or oversized")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if (manifest.get("schema_version") != "novostroy-deploy-data/1"
             or manifest.get("data_mode") != "real"
@@ -299,9 +311,12 @@ def verify_release(release: Path) -> dict[str, Any]:
         raise ValueError("Invalid release inventory")
     seen: set[str] = set()
     hashes: dict[str, str] = {}
+    total_bytes = 0
     for record in records:
-        relative = record.get("path")
-        if not isinstance(relative, str):
+        relative = record.get("path") if isinstance(record, dict) else None
+        if (not isinstance(relative, str) or "\\" in relative or "\0" in relative
+                or any(part in {"", ".", ".."} for part in relative.split("/"))
+                or type(record.get("bytes")) is not int or record["bytes"] < 0):
             raise ValueError("Invalid release path")
         parts = PurePosixPath(relative).parts
         if (not parts or parts[0] not in {"data", "assets"}
@@ -326,6 +341,9 @@ def verify_release(release: Path) -> dict[str, Any]:
         if digest.hexdigest() != expected:
             raise ValueError(f"Release file hash mismatch: {relative}")
         hashes[relative] = expected
+        total_bytes += record["bytes"]
+    if type(manifest.get("bytes_total")) is not int or manifest["bytes_total"] != total_bytes:
+        raise ValueError("Release total bytes differ from inventory")
     required = {
         "assets/manifest.json", "data/property/estateline/projects.jsonl",
         "data/property/estateline/source_manifest.json",
@@ -335,12 +353,17 @@ def verify_release(release: Path) -> dict[str, Any]:
     _verify_registry_model_pins(release, hashes)
     _verify_developer_map(release, hashes)
     _verify_developer_experience(release, hashes)
-    for folder_name in ("data", "assets"):
-        for path in (release / folder_name).rglob("*"):
-            if path.is_symlink():
-                raise ValueError(f"Release contains a link: {path}")
-            if path.is_file() and str(path.relative_to(release)) not in seen:
-                raise ValueError(f"Release contains an unlisted file: {path}")
+    from deploy.entrypoint import ROUTING_INPUT_FILES, verify_routing_inputs
+    # A SHA-pinned historical release may be used only as a delta input. New
+    # releases and deploys always require the connector and park inputs.
+    if not (allow_legacy_missing_route_inputs and not set(ROUTING_INPUT_FILES) & seen):
+        verify_routing_inputs(release, hashes)
+    allowed_files = seen | {"release-manifest.json"}
+    for path in release.rglob("*"):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError(f"Release contains a link or special file: {path}")
+        if path.is_file() and str(path.relative_to(release)) not in allowed_files:
+            raise ValueError(f"Release contains an unlisted file: {path}")
     return manifest
 
 

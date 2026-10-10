@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from deploy import apply_release, build_local_images, smoke_local
+from scripts.tests.runtime_fixture import routing_contents
 
 
 def fixture_release(root: Path) -> Path:
@@ -93,6 +94,7 @@ def fixture_release(root: Path) -> Path:
         f"data/property/developer_models/runs/{selected_run}/models.jsonl": selected_row,
         f"data/property/developer_models/runs/{selected_run}/assets/{selected_asset_sha}.glb": selected_asset,
     }
+    contents.update(routing_contents())
     files = []
     for relative, body in contents.items():
         path = release / relative
@@ -103,7 +105,7 @@ def fixture_release(root: Path) -> Path:
     (release / "release-manifest.json").write_text(json.dumps({
         "schema_version": "novostroy-deploy-data/1", "data_mode": "real",
         "registry_mode": "estateline", "profile": "full-compat",
-        "file_count": len(files), "files": files,
+        "file_count": len(files), "bytes_total": sum(item["bytes"] for item in files), "files": files,
     }), encoding="utf-8")
     return release
 
@@ -351,6 +353,7 @@ class DeployReleaseTests(unittest.TestCase):
             add("data/property/estateline/normalized/active.json",
                 json.dumps(pointer).encode("utf-8"))
             inventory["file_count"] = len(inventory["files"])
+            inventory["bytes_total"] = sum(item["bytes"] for item in inventory["files"])
             manifest_path.write_text(json.dumps(inventory), encoding="utf-8")
 
             self.assertEqual(apply_release.verify_release(release)["file_count"],
@@ -379,6 +382,7 @@ class DeployReleaseTests(unittest.TestCase):
             bundle_path.parent.mkdir(parents=True, exist_ok=True)
             bundle_path.write_bytes(wrong_bytes)
             inventory["file_count"] = len(inventory["files"])
+            inventory["bytes_total"] = sum(item["bytes"] for item in inventory["files"])
             manifest_path.write_text(json.dumps(inventory), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "active pointer"):
                 apply_release.verify_release(release)

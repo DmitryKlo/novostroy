@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test'
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const fixturePath = resolve(repo, '.runtime/research/building-experience-20261010/developer-experience-ui-fixture.json')
 
-test('staged source-plan regions and selected model keep one-step Escape and restore city volumes', async ({ page }, testInfo) => {
+test('staged source-plan regions and selected model keep one-step Escape and city volumes', async ({ page }, testInfo) => {
   test.skip(!existsSync(fixturePath), 'Staged developer experience fixture is not present')
   const fixture = JSON.parse(readFileSync(fixturePath, 'utf8'))
   const registryId = fixture.building.registry_id as string
@@ -43,9 +43,10 @@ test('staged source-plan regions and selected model keep one-step Escape and res
   await card.waitFor()
   await card.locator('button').click()
   await expect.poll(() => page.evaluate(() => window.__novoMapTest?.selectedModelState()), { timeout: 30_000 })
-    .toMatchObject({ loaded: true, visible: true })
+    .toMatchObject({ loaded: true, texturesReady: true, visible: true })
+  if (testInfo.project.name === 'mobile') expect(await page.locator('.map-point-card').evaluate((element) => getComputedStyle(element).clipPath)).toContain('inset')
   const whileSelected = await page.evaluate(() => window.__novoMapTest.selectedModelState())
-  expect(whileSelected.cityVolumes.every((tile: { shown: boolean }) => !tile.shown)).toBe(true)
+  expect(whileSelected.cityVolumes.every((tile: { shown: boolean; expectedWithoutSelection: boolean }) => tile.shown === tile.expectedWithoutSelection)).toBe(true)
   await page.screenshot({ path: `test-results/${testInfo.project.name}-developer-selected-model.png`, fullPage: true })
 
   const opener = page.locator('.map-point-card-item > button').filter({ hasText: 'Этажи и квартиры' }).first()

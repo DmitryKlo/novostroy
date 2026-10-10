@@ -30,7 +30,10 @@
                     "counts",
                     "registry_enabled",
                     "registry_snapshot_id",
-                    "catalog_view"
+                    "catalog_view",
+                    "map_run_id",
+                    "unit_run_id",
+                    "enrichment_run_id"
                   ],
                   "properties": {
                     "api_version": {
@@ -78,6 +81,20 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "unit_run_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+                    },
+                    "enrichment_run_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
                     }
                   }
                 }
@@ -661,7 +678,7 @@
     "/v1/registry/buildings": {
       "get": {
         "operationId": "listRegistryBuildings",
-        "description": "Before developer-map publication, returns the historical registry under its visibility policy. After publication, returns publisher-building identities with observed apartment counts, no current offer/price claim, and null coordinates where no building-specific location is verified. In developer mode only query and pagination are available; older status, floor, district and walking filters return 422.",
+        "description": "Publisher-building identities and observed apartment counts. Developer mode supports apartment filters plus exact district/okrug and maximum internal noise score from one pinned overlay. No current offer or price claim.",
         "parameters": [
           {
             "name": "query",
@@ -897,6 +914,28 @@
               "maximum": 10000
             },
             "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
@@ -957,7 +996,7 @@
     "/v1/registry/map": {
       "get": {
         "operationId": "mapRegistryBuildings",
-        "description": "Uses the same active snapshot and query as the building list. In developer mode only source-backed building-specific coordinates become markers; unlocated buildings stay in the list. Historical filters return 422 in developer mode.",
+        "description": "Uses the same pinned building, district/okrug, internal noise-index and observed-apartment predicates as the registry list. Only building-specific verified coordinates become markers; unlocated buildings stay in the list. Historical status, handover and walking filters return 422 in developer mode.",
         "parameters": [
           {
             "name": "query",
@@ -1165,6 +1204,28 @@
               "maximum": 10000
             },
             "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
@@ -1191,7 +1252,7 @@
     "/v1/map/points": {
       "get": {
         "operationId": "mapSourcePoints",
-        "description": "Before developer-map publication, returns the historical registry and separate OSM candidates. After publication, returns only eligible publisher-building points from the same snapshot as the list and registry map. A project marker is never copied to a building. Explicit publisher project IDs support group evidence; name and proximity do not. Historical filters return 422 in developer mode.",
+        "description": "Map-eligible publisher buildings filtered by the same observed-apartment and environment predicates as the registry list; no legacy candidate mixing.",
         "parameters": [
           {
             "name": "query",
@@ -1411,6 +1472,28 @@
               "maximum": 10000
             },
             "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
@@ -1769,7 +1852,7 @@
     "/v1/developer-buildings/{registry_id}/floors": {
       "get": {
         "operationId": "getDeveloperBuildingFloors",
-        "description": "Observed section and floor groupings for exact units of one current publisher building. Floor count is nullable; observed floors are only a lower bound.",
+        "description": "Source-complete section heights with floors and counts restricted to one observed apartment matching all requested constraints; zero-match floors are omitted.",
         "parameters": [
           {
             "name": "registry_id",
@@ -1777,6 +1860,129 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "required": false,
+            "description": "Exact matched district name or name-based ID from a pinned polygon overlay. Unknown district does not match.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
             }
           }
         ],
@@ -1797,7 +2003,7 @@
     "/v1/developer-buildings/{registry_id}/floors/{floor_id}": {
       "get": {
         "operationId": "getDeveloperBuildingFloor",
-        "description": "One exact observed floor. Hotspots remain empty until source-linked floor geometry is validated.",
+        "description": "One exact observed floor only when at least one apartment matches active constraints. Source plan regions have no unit link and are omitted under apartment filters.",
         "parameters": [
           {
             "name": "registry_id",
@@ -1813,6 +2019,129 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "required": false,
+            "description": "Exact matched district name or name-based ID from a pinned polygon overlay. Unknown district does not match.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
             }
           }
         ],
@@ -1871,55 +2200,91 @@
             "name": "price_min_rub",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000000}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
           },
           {
             "name": "price_max_rub",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000000}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
           },
           {
             "name": "price_per_m2_min_rub",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
           },
           {
             "name": "price_per_m2_max_rub",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
           },
           {
             "name": "rooms",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 20}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
           },
           {
             "name": "area_min_m2",
             "in": "query",
             "required": false,
-            "schema": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000}
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
           },
           {
             "name": "area_max_m2",
             "in": "query",
             "required": false,
-            "schema": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000}
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
           },
           {
             "name": "unit_floor_min",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": -10, "maximum": 300}
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
           },
           {
             "name": "unit_floor_max",
             "in": "query",
             "required": false,
-            "schema": {"type": "integer", "minimum": -10, "maximum": 300}
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
           },
           {
             "name": "limit",
@@ -1941,6 +2306,39 @@
               "minimum": 0,
               "default": 0
             }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "required": false,
+            "description": "Exact matched district name or name-based ID from a pinned polygon overlay. Unknown district does not match.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
@@ -1960,7 +2358,7 @@
     "/v1/developer-buildings/{registry_id}/units/{unit_id}": {
       "get": {
         "operationId": "getDeveloperBuildingUnit",
-        "description": "One exact source unit with observed facts and only prepared local plan assets.",
+        "description": "Exact observed apartment detail; returns 404 when the apartment does not satisfy active apartment constraints.",
         "parameters": [
           {
             "name": "registry_id",
@@ -1976,6 +2374,129 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "required": false,
+            "description": "Exact matched district name or name-based ID from a pinned polygon overlay. Unknown district does not match.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "okrug_id",
+            "in": "query",
+            "required": false,
+            "description": "Exact name-based okrug handle from pinned boundary overlay; not an official administrative code.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "max_noise_index",
+            "in": "query",
+            "required": false,
+            "description": "Maximum internal platform noise index (0–100; higher means noisier). Unknown scores are excluded only when this filter is active.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
             }
           }
         ],
@@ -2087,6 +2608,77 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/park-walk": {
+      "get": {
+        "operationId": "getDeveloperBuildingParkWalk",
+        "description": "Graph-routed walking distance to an OSM-mapped park boundary approach. The boundary is not a verified entrance; unreachable remains unavailable.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^registry-[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Walking route to a park boundary approach or explicit unavailable status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperParkWalk"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-media/{media_id}": {
+      "get": {
+        "operationId": "getDeveloperMediaAsset",
+        "description": "Source-bound preview from the active immutable media registry, served as a sanitized local PNG. Never accepts arbitrary source URLs. Source rights remain unconfirmed.",
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^media_[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prepared source-bound image preview",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching media in the active snapshot"
+          },
+          "503": {
+            "description": "Preparation unavailable or safe retrieval failed"
           }
         }
       }

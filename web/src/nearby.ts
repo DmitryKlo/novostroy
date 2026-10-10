@@ -91,6 +91,13 @@ export function walkingCaption(item: NearbyPoi): string {
   return `≈ ${new Intl.NumberFormat('ru-RU').format(Math.max(1, Math.ceil(route.estimated_minutes)))} мин пешком · ${new Intl.NumberFormat('ru-RU').format(route.distance_m)} м`
 }
 
+export function nearbyWalkingCaption(layer: NearbyCategory, item: NearbyPoi): string {
+  if (layer === 'metro' && item.route?.status === 'routed'
+    && Number.isFinite(item.route.estimated_minutes) && item.route.estimated_minutes !== null
+    && item.route.estimated_minutes > 40 && validRouteGeometry(item)) return 'Метро далеко'
+  return walkingCaption(item)
+}
+
 function validGeometry(value: [number, number][] | null | undefined): [number, number][] | null {
   if (!Array.isArray(value) || value.length < 2 || value.length > 512) return null
   return value.every((coordinate) => Array.isArray(coordinate) && coordinate.length === 2

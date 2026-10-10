@@ -29,7 +29,7 @@ test_python:
   needs: [source_boundary]
   timeout: 20m
   before_script:
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git zstd >/dev/null
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git zstd librsvg2-bin >/dev/null
     - python -m pip install --no-cache-dir -r requirements-dev.txt
   script:
     - python -m scripts.ci_python_tests

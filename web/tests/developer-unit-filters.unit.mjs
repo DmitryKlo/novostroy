@@ -18,7 +18,7 @@ test('observed apartment criteria convert to the strict server fields shared by 
   assert.deepEqual(selectedDeveloperUnitCriteria({ query: 'Лэйк', status: 'building', ...result.filters }), {
     price_min_rub: 12_500_000, price_max_rub: 18_000_000, price_per_m2_min_rub: undefined,
     price_per_m2_max_rub: 450_000, rooms: 2, area_min_m2: 45.5, area_max_m2: undefined,
-    unit_floor_min: 5, unit_floor_max: undefined,
+    unit_floor_min: 5, unit_floor_max: undefined, district: undefined, okrug_id: undefined, max_noise_index: undefined,
   })
 })
 
@@ -33,5 +33,19 @@ test('invalid ranges and decimals cannot silently broaden the source unit query'
     const result = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), ...draft })
     assert.ok(result.error)
     assert.deepEqual(result.filters, {})
+  }
+})
+
+test('okrug and noise only narrow houses when explicitly selected', () => {
+  assert.deepEqual(parseDeveloperUnitFilters(emptyDeveloperUnitFilters()).filters, {})
+  const selected = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), okrugId: 'okrug:северный административный', noiseMax: '0' })
+  assert.equal(selected.error, null)
+  assert.deepEqual(selected.filters, { okrug_id: 'okrug:северный административный', max_noise_index: 0 })
+  assert.equal(selectedDeveloperUnitCriteria(selected.filters).max_noise_index, 0)
+  assert.deepEqual(parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), noiseMax: '100' }).filters, { max_noise_index: 100 })
+  for (const noiseMax of ['101', '-1', '10.5', 'abc']) {
+    const invalid = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), noiseMax })
+    assert.ok(invalid.error)
+    assert.deepEqual(invalid.filters, {})
   }
 })

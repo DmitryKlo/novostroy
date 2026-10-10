@@ -161,6 +161,8 @@ def _fake_release(root: Path) -> Path:
         "model_manifest_sha256": hashlib.sha256(selected_model_manifest_body).hexdigest(),
     }, sort_keys=True).encode() + b"\n"
 
+    from scripts.tests.runtime_fixture import routing_contents
+    files.update(routing_contents())
     records = []
     for relative, body in files.items():
         _write(release / relative, body)

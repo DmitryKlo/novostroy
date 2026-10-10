@@ -10,6 +10,7 @@ import pytest
 
 from deploy.apply_release import verify_release as verify_deploy_release
 from scripts.package_deploy_data import DATA_FILES, apply_plan, make_plan, verify_release
+from scripts.tests.runtime_fixture import routing_contents
 
 
 ACTIVE = ("public-citywide-v11", "public-ground-v3", "public-roads-v2",
@@ -157,6 +158,8 @@ def _fixture(root: Path) -> None:
     _write(root / "assets" / MODEL_ROOT / ("model_" + "b" * 64 + ".glb"))
     for name in DATA_FILES:
         _write(root / name)
+    for relative, content in routing_contents().items():
+        _write_bytes(root / relative, content)
     _developer_map_fixture(root)
     model_rows = {
         "assessments": '{"assessment_id":"a1"}\n',

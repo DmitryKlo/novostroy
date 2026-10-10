@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { NearbyCategory, NearbyEducation, NearbySelection } from './api'
-import { displayNearbyItems, NEARBY_CATEGORIES, NEARBY_LABELS, originAccessCaption, shownNearbyItems, walkingCaption, type NearbyVisibility } from './nearby'
+import { displayNearbyItems, NEARBY_CATEGORIES, NEARBY_LABELS, nearbyWalkingCaption, originAccessCaption, shownNearbyItems, type NearbyVisibility } from './nearby'
 import useMobileViewport from './useMobileViewport'
 
 type Props = {
@@ -63,7 +63,7 @@ export default function NearbyPanel({ selectedName, selectedHasPoint, visible, o
           {displayNearbyItems(layer, data.layers[layer]?.items ?? []).map((item) => <button key={item.id} type="button" className={selectedPoiId === item.id ? 'nearby-item selected' : 'nearby-item'}
             onClick={() => onSelectPoi(item.id)} aria-pressed={selectedPoiId === item.id}>
             <span className="nearby-item-title"><b>{item.name}</b>{item.category === 'school' ? <em>школа</em> : item.category === 'kindergarten' ? <em>детсад</em> : null}</span>
-            <span>{walkingCaption(item)}</span>
+            <span>{nearbyWalkingCaption(layer, item)}</span>
             {originAccessCaption(item) && <small className="nearby-origin-access">{originAccessCaption(item)}</small>}
             {item.free_oms.status === 'verified_program_participant' && <small>Участие в ОМС подтверждено; доступность услуги уточните.</small>}
           </button>)}

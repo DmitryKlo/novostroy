@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const source = await readFile(new URL('../src/nearby.ts', import.meta.url), 'utf8')
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
-const { boundedNearbyBbox, displayNearbyItems, NearbyCache, nearbyKey, nearbyViewportKey, noNearbyLayers, shownNearbyItems, validNearbyResult, validNearbyViewport, validRouteGeometry, validNetworkRouteGeometry, validOriginAccessGeometry, originAccessCaption, walkingCaption } = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
+const { boundedNearbyBbox, displayNearbyItems, NearbyCache, nearbyKey, nearbyViewportKey, noNearbyLayers, shownNearbyItems, validNearbyResult, validNearbyViewport, validRouteGeometry, validNetworkRouteGeometry, validOriginAccessGeometry, originAccessCaption, walkingCaption, nearbyWalkingCaption } = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
 
 const item = (id, route = null) => ({ id, name: id, category: 'school', coordinate: { lon: 37.6, lat: 55.7 },
   coordinate_basis: 'source_point', straight_line_m: 300, route, free_oms: { status: 'unknown', scope: null } })
@@ -35,6 +35,16 @@ test('only routed geometry earns walking time; straight-line distance never crea
   assert.match(walkingCaption(item('ferry', { status: 'contains_ferry' })), /включает паром/)
   assert.equal(validRouteGeometry(routed).length, 2)
   assert.equal(validRouteGeometry(item('invalid', { ...routed.route, geometry: [[37.6, 55.7], [190, 55.7]] })), null)
+})
+
+test('metro is far only for a confirmed walking route above 40 minutes', () => {
+  const routed = (minutes) => item('metro', { status: 'routed', distance_m: 3000, estimated_minutes: minutes,
+    geometry: [[37.6, 55.7], [37.61, 55.71]] })
+  assert.match(nearbyWalkingCaption('metro', routed(40)), /40 мин пешком/)
+  assert.equal(nearbyWalkingCaption('metro', routed(41)), 'Метро далеко')
+  assert.match(nearbyWalkingCaption('education', routed(41)), /41 мин пешком/)
+  assert.equal(nearbyWalkingCaption('metro', item('unknown')), 'Пеший маршрут пока не подтверждён')
+  assert.equal(nearbyWalkingCaption('metro', item('no-route', { status: 'no_route', estimated_minutes: null })), 'Пеший маршрут пока не подтверждён')
 })
 
 test('estimated access to the street stays separate from the routed network path', () => {

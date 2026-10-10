@@ -11,7 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY deploy/requirements-api.txt /app/deploy/requirements-api.txt
-RUN python -m pip install --no-cache-dir -r /app/deploy/requirements-api.txt \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates librsvg2-bin \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir -r /app/deploy/requirements-api.txt \
     && useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin novostroy \
     && mkdir -p /app/data/runtime /app/assets \
     && chown -R novostroy:novostroy /app/data /app/assets
@@ -21,6 +25,7 @@ COPY analytics/ /app/analytics/
 COPY recommendations/ /app/recommendations/
 COPY contracts/ /app/contracts/
 COPY deploy/entrypoint.py /app/deploy/entrypoint.py
+COPY scripts/seed_developer_media_capture.py /app/scripts/seed_developer_media_capture.py
 
 USER novostroy
 EXPOSE 8000

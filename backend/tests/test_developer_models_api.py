@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from backend import app as api, developer_experience, developer_map, developer_models, developer_units
+from backend import (app as api, developer_enrichment, developer_experience,
+                     developer_map, developer_models, developer_units)
 
 
 MAP_RUN = "developer-map-v1-0123456789abcdef"
@@ -111,4 +112,42 @@ def test_mismatched_menu_generation_does_not_serve_model(
     pointer["map_manifest_sha256"] = "0" * 64
     _write(developer_experience.ACTIVE_PATH, json.dumps(pointer).encode())
     with pytest.raises(ValueError, match="active map generation"):
+        developer_experience.resolve_active(map_run)
+
+
+def test_v2_experience_resolves_one_exact_enrichment_generation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    map_run, menu_run, model_run, _ = _fixture(monkeypatch, tmp_path)
+    monkeypatch.setattr(developer_experience, "ACTIVE_PATH", tmp_path / "experience-v2.json")
+    monkeypatch.setattr(developer_units, "load_staged", lambda *_args, **_kwargs: menu_run)
+    monkeypatch.setattr(developer_models, "load_staged", lambda *_args, **_kwargs: model_run)
+    calls: list[tuple] = []
+    overlay = {"manifest": {"run_id": "developer-enrichment-v1-" + "e" * 16}}
+
+    def load_enrichment(*args: object, **kwargs: object) -> dict:
+        calls.append((args, kwargs))
+        return overlay
+
+    monkeypatch.setattr(developer_enrichment, "load_staged", load_enrichment)
+    pointer = {"schema_version": "developer-experience-pointer/2",
+               "map_run_id": MAP_RUN, "map_snapshot_id": MAP_SNAPSHOT,
+               "map_manifest_sha256": hashlib.sha256(
+                   (developer_map.BASE / "runs" / MAP_RUN / "manifest.json").read_bytes()).hexdigest(),
+               "unit_run_id": MENU_RUN, "unit_manifest_sha256": hashlib.sha256(
+                   (developer_units.BASE / "runs" / MENU_RUN / "manifest.json").read_bytes()).hexdigest(),
+               "model_run_id": MODEL_RUN, "model_manifest_sha256": hashlib.sha256(
+                   (developer_models.BASE / "runs" / MODEL_RUN / "manifest.json").read_bytes()).hexdigest(),
+               "enrichment_run_id": overlay["manifest"]["run_id"],
+               "enrichment_manifest_sha256": "f" * 64}
+    _write(developer_experience.ACTIVE_PATH, json.dumps(pointer).encode())
+    resolved_menu, resolved_models = developer_experience.resolve_active(map_run)
+    assert resolved_models is model_run
+    assert resolved_menu["enrichment"] is overlay
+    assert "enrichment" not in menu_run
+    assert calls[0][0][:4] == (pointer["enrichment_run_id"], map_run, menu_run, model_run)
+    assert calls[0][1]["expected_manifest_sha256"] == pointer["enrichment_manifest_sha256"]
+    pointer["enrichment_manifest_sha256"] = "bad"
+    _write(developer_experience.ACTIVE_PATH, json.dumps(pointer).encode())
+    with pytest.raises(ValueError, match="Invalid developer experience pointer"):
         developer_experience.resolve_active(map_run)

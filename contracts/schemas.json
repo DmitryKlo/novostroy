@@ -2365,7 +2365,15 @@
         "building_type",
         "has_apartment_data",
         "offer_count",
-        "price"
+        "price",
+        "okrug_id",
+        "okrug_name",
+        "district_id",
+        "district_name",
+        "noise_index",
+        "air_quality",
+        "media",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_id": {
@@ -2485,6 +2493,54 @@
         "matching_units_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "okrug_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "okrug_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "district_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "district_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "noise_index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "air_quality": {
+          "$ref": "#/$defs/DeveloperAirQuality"
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMedia"
+          }
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2505,7 +2561,8 @@
         "facets",
         "items",
         "unit_run_id",
-        "applied_filters"
+        "applied_filters",
+        "enrichment_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -2552,7 +2609,10 @@
           "required": [
             "developers",
             "map_eligible_count",
-            "unlocated_count"
+            "unlocated_count",
+            "okrugs",
+            "districts",
+            "noise_known_count"
           ],
           "properties": {
             "developers": {
@@ -2566,6 +2626,62 @@
               "minimum": 0
             },
             "unlocated_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "okrugs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "count"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "districts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "count"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "noise_known_count": {
               "type": "integer",
               "minimum": 0
             }
@@ -2587,6 +2703,13 @@
         },
         "applied_filters": {
           "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2603,7 +2726,8 @@
         "items",
         "counts",
         "applied_filters",
-        "unit_run_id"
+        "unit_run_id",
+        "enrichment_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -2685,6 +2809,13 @@
             "null"
           ],
           "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2708,7 +2839,15 @@
         "unit_count",
         "observed_at",
         "city",
-        "latest_known_date"
+        "latest_known_date",
+        "okrug_id",
+        "okrug_name",
+        "district_id",
+        "district_name",
+        "noise_index",
+        "air_quality",
+        "media",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_id": {
@@ -2783,6 +2922,54 @@
         "matching_units_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "okrug_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "okrug_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "district_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "district_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "noise_index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "air_quality": {
+          "$ref": "#/$defs/DeveloperAirQuality"
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMedia"
+          }
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2800,7 +2987,8 @@
         "applied_filters",
         "group_evidence",
         "items",
-        "unit_run_id"
+        "unit_run_id",
+        "enrichment_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -2925,6 +3113,13 @@
             "null"
           ],
           "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4144,7 +4339,9 @@
         "observed_at",
         "record_updated_at",
         "availability",
-        "has_prepared_plan"
+        "has_prepared_plan",
+        "media",
+        "observed_attributes"
       ],
       "properties": {
         "unit_id": {
@@ -4248,6 +4445,22 @@
               "type": "null"
             }
           ]
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMedia"
+          }
+        },
+        "observed_attributes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeveloperObservedAttributes"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -4258,6 +4471,8 @@
         "floor_id",
         "floor_number",
         "unit_count",
+        "source_unit_count",
+        "matching_unit_count",
         "geometry_status",
         "plan"
       ],
@@ -4272,6 +4487,14 @@
         "unit_count": {
           "type": "integer",
           "minimum": 1
+        },
+        "source_unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "matching_unit_count": {
+          "type": "integer",
+          "minimum": 0
         },
         "geometry_status": {
           "enum": [
@@ -4352,7 +4575,12 @@
         "total_floors",
         "max_observed_unit_floor",
         "sections",
-        "unassigned_unit_count"
+        "unassigned_unit_count",
+        "source_unassigned_unit_count",
+        "matching_unassigned_unit_count",
+        "matching_units_total",
+        "applied_filters",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4401,6 +4629,28 @@
         "unassigned_unit_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "source_unassigned_unit_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matching_unassigned_unit_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matching_units_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4494,10 +4744,15 @@
         "section_label",
         "floor_number",
         "unit_count",
+        "source_unit_count",
+        "matching_unit_count",
+        "applied_filters",
         "geometry_status",
         "plan",
         "plan_regions",
-        "hotspots"
+        "hotspots",
+        "media",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4544,6 +4799,17 @@
           "type": "integer",
           "minimum": 1
         },
+        "source_unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "matching_unit_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
         "geometry_status": {
           "enum": [
             "none",
@@ -4570,6 +4836,19 @@
         "hotspots": {
           "type": "array",
           "maxItems": 0
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMedia"
+          }
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4585,7 +4864,8 @@
         "limit",
         "offset",
         "applied_filters",
-        "items"
+        "items",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4625,6 +4905,13 @@
           "items": {
             "$ref": "#/$defs/DeveloperUnit"
           }
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4648,7 +4935,8 @@
         "asset_sha256",
         "geometry_attribution",
         "photo_facade_reconstruction",
-        "texture_basis"
+        "texture_basis",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4755,6 +5043,13 @@
             "© OpenStreetMap contributors",
             null
           ]
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4780,7 +5075,11 @@
         "record_updated_at",
         "availability",
         "has_prepared_plan",
-        "plans"
+        "applied_filters",
+        "plans",
+        "media",
+        "observed_attributes",
+        "enrichment_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4896,6 +5195,9 @@
             "$ref": "#/$defs/DeveloperUnitPlan"
           }
         },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
         "record_updated_at": {
           "anyOf": [
             {
@@ -4906,6 +5208,29 @@
               "type": "null"
             }
           ]
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMedia"
+          }
+        },
+        "observed_attributes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeveloperObservedAttributes"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4961,6 +5286,21 @@
           "type": "integer",
           "minimum": -10,
           "maximum": 300
+        },
+        "district": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "okrug_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "max_noise_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         }
       },
       "additionalProperties": false
@@ -5024,6 +5364,417 @@
         },
         "policy_version": {
           "const": "origin-access-connector-v2"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperParkWalk": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "registry_id",
+        "dataset_id",
+        "osm_snapshot_at",
+        "park_candidate_limit",
+        "route_attempts",
+        "attribution",
+        "status",
+        "park",
+        "distance_m",
+        "estimated_minutes",
+        "approximate",
+        "endpoint_basis",
+        "boundary_gap_m",
+        "access_verified",
+        "origin_access",
+        "enrichment_run_id"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "dataset_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 400
+        },
+        "osm_snapshot_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40
+        },
+        "park_candidate_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "route_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "attribution": {
+          "const": "© OpenStreetMap contributors"
+        },
+        "status": {
+          "enum": [
+            "routed",
+            "unavailable"
+          ]
+        },
+        "park": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^park_[a-f0-9]{24}$"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 160
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "distance_m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimated_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "approximate": {
+          "const": true
+        },
+        "endpoint_basis": {
+          "enum": [
+            "pedestrian_graph_near_park_boundary",
+            null
+          ]
+        },
+        "boundary_gap_m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 15
+        },
+        "access_verified": {
+          "const": false
+        },
+        "origin_access": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/NearbyOriginAccess"
+            }
+          ]
+        },
+        "enrichment_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperAirQuality": {
+      "type": "object",
+      "required": [
+        "status",
+        "label",
+        "value",
+        "unit",
+        "observed_at",
+        "scope",
+        "pm2_5_ug_m3",
+        "pm10_ug_m3",
+        "no2_ug_m3",
+        "valid_at",
+        "retrieved_at",
+        "spatial_scope",
+        "grid_cell_center",
+        "cell_resolution_km_approx",
+        "stale",
+        "measurement",
+        "measured_district_average",
+        "data_credit",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "unavailable",
+            "modeled_forecast"
+          ]
+        },
+        "label": {
+          "enum": [
+            "Модельная оценка",
+            null
+          ]
+        },
+        "value": {
+          "type": "null"
+        },
+        "unit": {
+          "enum": [
+            "µg/m³",
+            null
+          ]
+        },
+        "observed_at": {
+          "type": "null"
+        },
+        "scope": {
+          "enum": [
+            "district",
+            "sampled_grid_cell_for_district"
+          ]
+        },
+        "pm2_5_ug_m3": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "pm10_ug_m3": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "no2_ug_m3": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "valid_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retrieved_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spatial_scope": {
+          "enum": [
+            "sampled_grid_cell_for_district",
+            null
+          ]
+        },
+        "grid_cell_center": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LonLat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cell_resolution_km_approx": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "stale": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "measurement": {
+          "const": false
+        },
+        "measured_district_average": {
+          "const": false
+        },
+        "data_credit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "no_district_model_sample",
+            null
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperMedia": {
+      "type": "object",
+      "required": [
+        "media_id",
+        "scope",
+        "role",
+        "label",
+        "observed_at",
+        "asset_url",
+        "availability"
+      ],
+      "properties": {
+        "media_id": {
+          "type": "string",
+          "pattern": "^media_[a-f0-9]{24}$"
+        },
+        "scope": {
+          "enum": [
+            "unit_plan",
+            "floor_plan",
+            "project_gallery",
+            "project_gallery_single_corpus"
+          ]
+        },
+        "role": {
+          "enum": [
+            "apartment_plan",
+            "furnished_apartment_plan",
+            "floor_plan",
+            "project_rendering",
+            "facade_photo"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "asset_url": {
+          "type": "string",
+          "pattern": "^/v1/developer-media/media_[a-f0-9]{24}$"
+        },
+        "availability": {
+          "enum": [
+            "prepared",
+            "on_demand"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperObservedAttributes": {
+      "type": "object",
+      "required": [
+        "observed_at",
+        "record_updated_at",
+        "finishing_label",
+        "delivery_deadline",
+        "source_sale_status",
+        "previous_price_rub",
+        "discount_percent",
+        "availability_confirmed_current",
+        "payment_terms_confirmed_unconditional"
+      ],
+      "properties": {
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "record_updated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "finishing_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delivery_deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_sale_status": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "previous_price_rub": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "discount_percent": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "availability_confirmed_current": {
+          "const": false
+        },
+        "payment_terms_confirmed_unconditional": {
+          "const": false
         }
       },
       "additionalProperties": false

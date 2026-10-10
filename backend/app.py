@@ -8,7 +8,7 @@ import re
 import hashlib
 import logging
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 from typing import Any, Literal
 
@@ -28,7 +28,7 @@ from backend.map_point_groups import GroupEvidenceError, load_group_evidence
 from backend.models import (CANDIDATE_ID_RE, MODEL_FILE_RE, PUBLIC_ROOT_RE,
                             REASONS, load_model_run, public_model_filenames,
                             select_candidates)
-from backend.nearby import nearby_for_point, nearby_in_viewport
+from backend.nearby import nearby_for_point, nearby_in_viewport, park_walk_for_point
 from backend.point_labels import load_point_labels
 from backend.registry import load_registry, registry_enabled, select_records
 from backend.registry_walk import walk_minutes_for_registry
@@ -365,6 +365,9 @@ def health() -> dict[str, Any]:
                          "building_registry" if registry_is_enabled else catalogue["data_mode"]),
         "map_run_id": developer_snapshot["manifest"]["run_id"] if developer_snapshot is not None else None,
         "unit_run_id": experience[0]["manifest"]["run_id"] if experience is not None else None,
+        "enrichment_run_id": (experience[0]["enrichment"]["manifest"]["run_id"]
+                              if experience is not None and
+                              experience[0].get("enrichment") is not None else None),
     })
 
 
@@ -424,8 +427,11 @@ def _developer_as_of(snapshot: dict[str, Any]) -> str:
 
 
 def _developer_list(
-    snapshot: dict[str, Any], query: str | None, **raw_unit_filters: Any
-) -> tuple[list[dict[str, Any]], dict[str, int], str | None, dict[str, Any]]:
+    snapshot: dict[str, Any], query: str | None, *, district: str | None = None,
+    okrug_id: str | None = None, max_noise_index: int | None = None,
+    **raw_unit_filters: Any
+) -> tuple[list[dict[str, Any]], dict[str, int], str | None, dict[str, Any],
+           dict[str, Any] | None]:
     """Use one observed apartment for every hard constraint across all views."""
     try:
         filters = developer_units.normalize_unit_filters(**raw_unit_filters)
@@ -436,7 +442,34 @@ def _developer_list(
     except (OSError, ValueError, RuntimeError, KeyError, TypeError,
             json.JSONDecodeError) as exc:
         raise error("unit_menu_unavailable", "Проверенный список квартир временно недоступен", 503) from exc
+    if district is not None:
+        if not isinstance(district, str) or not 0 < len(district.strip()) <= 160:
+            raise error("invalid_request", "Неверный район", 422)
+        district = district.strip()
+    if okrug_id is not None:
+        if not isinstance(okrug_id, str) or not 0 < len(okrug_id.strip()) <= 100:
+            raise error("invalid_request", "Неверный округ", 422)
+        okrug_id = okrug_id.strip()
+    if max_noise_index is not None and (type(max_noise_index) is not int or
+                                        not 0 <= max_noise_index <= 100):
+        raise error("invalid_request", "Индекс шума должен быть от 0 до 100", 422)
+    overlay = experience[0].get("enrichment") if experience is not None else None
+    if overlay is None and any(value is not None for value in
+                               (district, okrug_id, max_noise_index)):
+        raise error("developer_enrichment_unavailable",
+                    "Фильтры округа, района и шума ещё подготавливаются", 503)
     selected = developer_map.selected(snapshot, query)
+    if overlay is not None:
+        enriched = overlay["buildings"]
+        selected = [row for row in selected if
+                    enriched[row["registry_id"]]["visibility_eligible"] and
+                    (district is None or district.casefold() in {
+                        str(enriched[row["registry_id"]].get("district_id") or "").casefold(),
+                        str(enriched[row["registry_id"]].get("district_name") or "").casefold()}) and
+                    (okrug_id is None or enriched[row["registry_id"]].get("okrug_id") == okrug_id) and
+                    (max_noise_index is None or (
+                        enriched[row["registry_id"]].get("noise_index") is not None and
+                        enriched[row["registry_id"]]["noise_index"] <= max_noise_index))]
     if experience is None:
         if filters:
             raise error("unit_menu_unavailable", "Фильтры квартир ещё подготавливаются", 503)
@@ -445,7 +478,9 @@ def _developer_list(
     else:
         menu = experience[0]
         menu_run_id = menu["manifest"]["run_id"]
-        key = (snapshot["manifest"]["run_id"], menu_run_id, query,
+        key = (snapshot["manifest"]["run_id"], menu_run_id,
+               overlay["manifest"]["run_id"] if overlay else None,
+               query, district, okrug_id, max_noise_index,
                tuple(sorted(filters.items())))
         cache = menu.setdefault("selection_cache", {})
         counts = cache.get(key)
@@ -457,9 +492,116 @@ def _developer_list(
             cache[key] = counts
         if filters:
             selected = [row for row in selected if counts[row["registry_id"]] > 0]
-    applied = {key: value for key, value in (("query", query), *filters.items())
+    applied = {key: value for key, value in (("query", query),
+               ("district", district), ("okrug_id", okrug_id),
+               ("max_noise_index", max_noise_index), *filters.items())
                if value is not None}
-    return selected, counts, menu_run_id, applied
+    return selected, counts, menu_run_id, applied, overlay
+
+
+def _public_air_quality(building: dict[str, Any] | None) -> dict[str, Any]:
+    """Label one dated CAMS grid sample without calling it a district measurement."""
+    model = building.get("air_model") if building is not None else None
+    result = {"status": "unavailable", "label": None, "value": None,
+              "unit": None, "observed_at": None, "scope": "district",
+              "pm2_5_ug_m3": None, "pm10_ug_m3": None, "no2_ug_m3": None,
+              "valid_at": None, "retrieved_at": None,
+              "spatial_scope": None, "grid_cell_center": None,
+              "cell_resolution_km_approx": None, "stale": None,
+              "measurement": False, "measured_district_average": False,
+              "data_credit": None, "reason": "no_district_model_sample"}
+    if model is None:
+        return result
+    try:
+        valid = datetime.fromisoformat(model["forecast_at"].replace("Z", "+00:00"))
+        retrieved = datetime.fromisoformat(model["retrieved_at"].replace("Z", "+00:00"))
+        if valid.tzinfo is None or retrieved.tzinfo is None:
+            return result
+        stale = datetime.now(timezone.utc) > valid + timedelta(hours=24)
+    except (KeyError, TypeError, ValueError):
+        return result
+    return {**result, "status": "modeled_forecast", "label": "Модельная оценка",
+            "unit": "µg/m³", "scope": "sampled_grid_cell_for_district",
+            "pm2_5_ug_m3": model.get("pm2_5_ug_m3"),
+            "pm10_ug_m3": model.get("pm10_ug_m3"),
+            "no2_ug_m3": model.get("no2_ug_m3"),
+            "valid_at": model["forecast_at"],
+            "retrieved_at": model["retrieved_at"],
+            "spatial_scope": "sampled_grid_cell_for_district",
+            "grid_cell_center": model.get("returned_grid_center_lon_lat"),
+            "cell_resolution_km_approx": 11,
+            "stale": stale,
+            "data_credit": "Open-Meteo / CAMS Europe, CC BY 4.0",
+            "reason": None}
+
+
+def _developer_public_environment(row: dict[str, Any],
+                                  overlay: dict[str, Any] | None) -> dict[str, Any]:
+    if overlay is None:
+        return {"enrichment_run_id": None,
+                "okrug_id": None, "okrug_name": None, "district_id": None,
+                "district_name": None, "noise_index": None,
+                "air_quality": _public_air_quality(None), "media": []}
+    value = overlay["buildings"][row["registry_id"]]
+    return {"enrichment_run_id": overlay["manifest"]["run_id"],
+            "okrug_id": value.get("okrug_id"), "okrug_name": value.get("okrug_name"),
+            "district_id": value.get("district_id"),
+            "district_name": value.get("district_name"),
+            "noise_index": value.get("noise_index"),
+            "air_quality": _public_air_quality(value),
+            "media": _public_developer_media(overlay["media_by_registry"].get(
+                row["registry_id"], []))}
+
+
+def _public_developer_media(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    labels = {"unit_plan": "Планировка квартиры",
+              "floor_plan": "План этажа",
+              "project_gallery": "Визуализация ЖК",
+              "project_gallery_single_corpus": "Визуализация ЖК"}
+    return [{"media_id": row["media_id"], "scope": row["scope"],
+             "role": row["role"],
+             "label": ("Фото ЖК" if row["scope"] == "project_gallery_single_corpus"
+                       and row["role"] == "facade_photo" else labels[row["scope"]]),
+             "observed_at": row["observed_at"],
+             "asset_url": f"/v1/developer-media/{row['media_id']}",
+             "availability": "prepared" if row.get("prepared_sha256") else "on_demand"}
+            for row in rows]
+
+
+def _public_unit_enrichment(menu: dict[str, Any], unit: dict[str, Any]
+                            ) -> dict[str, Any]:
+    overlay = menu.get("enrichment")
+    if overlay is None:
+        return {"media": [], "observed_attributes": None}
+    details = overlay["units"][unit["unit_id"]]
+    attributes = {"observed_at": details["observed_at"],
+                  "record_updated_at": details.get("source_updated_at"),
+                  "finishing_label": details.get("finishing_label"),
+                  "delivery_deadline": details.get("delivery_deadline_raw"),
+                  "source_sale_status": details.get("source_sale_status"),
+                  "previous_price_rub": details.get("source_previous_price_rub"),
+                  "discount_percent": details.get("source_discount_percent"),
+                  "availability_confirmed_current": False,
+                  "payment_terms_confirmed_unconditional": False}
+    return {"media": _public_developer_media(
+                overlay["media_by_unit"].get(unit["unit_id"], [])),
+            "observed_attributes": attributes}
+
+
+def _developer_environment_facets(overlay: dict[str, Any] | None) -> dict[str, Any]:
+    if overlay is None:
+        return {"okrugs": [], "districts": [], "noise_known_count": 0}
+    visible = [row for row in overlay["buildings"].values()
+               if row["visibility_eligible"]]
+    def options(id_key: str, name_key: str) -> list[dict[str, Any]]:
+        values = Counter((row[id_key], row[name_key]) for row in visible
+                         if row.get(id_key) and row.get(name_key))
+        return [{"id": identity, "name": name, "count": count}
+                for (identity, name), count in sorted(values.items())]
+
+    return {"okrugs": options("okrug_id", "okrug_name"),
+            "districts": options("district_id", "district_name"),
+            "noise_known_count": sum(row.get("noise_index") is not None for row in visible)}
 
 
 def _selected_registry(registry: dict[str, Any], **filters: Any) -> list[dict[str, Any]]:
@@ -622,6 +764,8 @@ def map_points(
     status: str | None = Query(default=None, max_length=200),
     kind: str | None = Query(default=None, max_length=80),
     district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -643,15 +787,16 @@ def map_points(
     """All source-backed point records, preserving distinct project identities."""
     developer_snapshot = active_developer_map()
     if developer_snapshot is not None:
-        _developer_filters(status=status, kind=kind, district=district,
+        _developer_filters(status=status, kind=kind,
                            handover_year=handover_year, handover_quarter=handover_quarter,
                            floors_min=floors_min, floors_max=floors_max,
                            walk_metro_max_min=walk_metro_max_min,
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied = _developer_list(
-            developer_snapshot, query, price_min_rub=price_min_rub,
+        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+            developer_snapshot, query, district=district, okrug_id=okrug_id,
+            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -659,6 +804,7 @@ def map_points(
             unit_floor_min=unit_floor_min, unit_floor_max=unit_floor_max)
         rows = [row for row in selected if row["map_eligible"]]
         items = [{**developer_map.public_point(row),
+                  **_developer_public_environment(row, overlay),
                   "matching_units_count": unit_counts[row["registry_id"]]} for row in rows]
         manifest = developer_snapshot["manifest"]
         point_ids = {row["point_id"] for row in rows}
@@ -667,6 +813,7 @@ def map_points(
             "registry_snapshot_id": manifest["snapshot_id"],
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
+            "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
             "checked_at": _developer_as_of(developer_snapshot),
             "dataset_total": manifest["buildings_total"],
@@ -687,6 +834,7 @@ def map_points(
             "items": items,
         }, cache_scope="private", weak_validator=True)
     _legacy_unit_filter_guard(
+        okrug_id=okrug_id, max_noise_index=max_noise_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
@@ -882,6 +1030,8 @@ def registry_buildings(
     status: str | None = Query(default=None, max_length=200),
     kind: str | None = Query(default=None, max_length=80),
     district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -904,15 +1054,16 @@ def registry_buildings(
 ) -> dict[str, Any]:
     developer_snapshot = active_developer_map()
     if developer_snapshot is not None:
-        _developer_filters(status=status, kind=kind, district=district,
+        _developer_filters(status=status, kind=kind,
                            handover_year=handover_year, handover_quarter=handover_quarter,
                            floors_min=floors_min, floors_max=floors_max,
                            walk_metro_max_min=walk_metro_max_min,
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied = _developer_list(
-            developer_snapshot, query, price_min_rub=price_min_rub,
+        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+            developer_snapshot, query, district=district, okrug_id=okrug_id,
+            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -923,6 +1074,7 @@ def registry_buildings(
             "dataset_id": "developer_building_registry", "snapshot_id": manifest["snapshot_id"],
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
+            "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
             "dataset_total": manifest["buildings_total"],
             "source_total": manifest["buildings_total"], "archived_total": 0,
@@ -931,13 +1083,16 @@ def registry_buildings(
                                        sorted(Counter(row["developer_name"] for row in developer_snapshot["rows"]
                                                       if row["developer_name"]).items())],
                        "map_eligible_count": manifest["map_points_total"],
-                       "unlocated_count": manifest["buildings_total"] - manifest["map_points_total"]},
+                       "unlocated_count": manifest["buildings_total"] - manifest["map_points_total"],
+                       **_developer_environment_facets(overlay)},
             "applied_filters": applied,
             "items": [{**developer_map.public_building(row),
+                       **_developer_public_environment(row, overlay),
                        "matching_units_count": unit_counts[row["registry_id"]]}
                       for row in selected[offset:offset + limit]],
         })
     _legacy_unit_filter_guard(
+        okrug_id=okrug_id, max_noise_index=max_noise_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
@@ -987,7 +1142,17 @@ def registry_building_detail(registry_id: str) -> dict[str, Any]:
         row = developer_snapshot["by_registry"].get(registry_id)
         if row is None:
             raise error("not_found", "Building record not found", 404)
-        return public_payload(developer_map.public_building(row))
+        try:
+            experience = developer_experience.current(developer_snapshot)
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError,
+                json.JSONDecodeError) as exc:
+            raise error("developer_enrichment_unavailable",
+                        "Проверенный снимок домов временно недоступен", 503) from exc
+        overlay = experience[0].get("enrichment") if experience is not None else None
+        if overlay is not None and not overlay["buildings"][registry_id]["visibility_eligible"]:
+            raise error("not_found", "Building record not found", 404)
+        return public_payload({**developer_map.public_building(row),
+                               **_developer_public_environment(row, overlay)})
     registry = active_registry()
     item = next((item for item in registry["items"] if item["registry_id"] == registry_id
                  and registry_id in registry["visible_ids"]), None)
@@ -1018,15 +1183,110 @@ def _unit_identity(map_snapshot: dict[str, Any], menu: dict[str, Any],
     manifest = map_snapshot["manifest"]
     return {"registry_snapshot_id": manifest["snapshot_id"],
             "map_run_id": manifest["run_id"],
-            "unit_run_id": menu["manifest"]["run_id"], "registry_id": registry_id}
+            "unit_run_id": menu["manifest"]["run_id"],
+            "enrichment_run_id": (menu["enrichment"]["manifest"]["run_id"]
+                                  if menu.get("enrichment") else None),
+            "registry_id": registry_id}
+
+
+@app.get("/v1/developer-buildings/{registry_id}/park-walk")
+def developer_building_park_walk(registry_id: str) -> dict[str, Any]:
+    """Walking route to a mapped park boundary approach, never its centroid."""
+    map_snapshot, menu = active_unit_menu()
+    identity = _unit_identity(map_snapshot, menu, registry_id)
+    _menu_environment_filters(menu, registry_id, {})
+    building = map_snapshot["by_registry"][registry_id]
+    if not building["map_eligible"] or building["location"] is None:
+        payload = public_payload({**identity, "status": "unavailable", "park": None,
+                               "distance_m": None, "estimated_minutes": None,
+                               "approximate": True, "endpoint_basis": None,
+                               "boundary_gap_m": None, "access_verified": False,
+                               "origin_access": None, "dataset_id": None,
+                               "osm_snapshot_at": None,
+                               "park_candidate_limit": 0, "route_attempts": 0,
+                               "attribution": "© OpenStreetMap contributors"})
+        payload["attribution"] = "© OpenStreetMap contributors"
+        return payload
+    try:
+        route = park_walk_for_point(*building["location"],
+                                    origin_id=building["point_id"])
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise error("park_walk_unavailable", "Маршрут до парка временно недоступен", 503) from exc
+    payload = public_payload({**identity, **route})
+    payload["attribution"] = "© OpenStreetMap contributors"
+    return payload
+
+
+def _menu_unit_filters(values: dict[str, Any]) -> dict[str, int | float]:
+    try:
+        return developer_units.normalize_unit_filters(**{
+            key: values.get(key) for key in developer_units.UNIT_FILTER_NAMES
+        })
+    except ValueError as exc:
+        raise error("invalid_request", str(exc), 422) from exc
+
+
+def _menu_environment_filters(menu: dict[str, Any], registry_id: str,
+                              values: dict[str, Any]) -> dict[str, Any]:
+    district = values.get("district")
+    okrug_id = values.get("okrug_id")
+    max_noise_index = values.get("max_noise_index")
+    if district is not None and (not isinstance(district, str) or
+                                 not 0 < len(district.strip()) <= 160):
+        raise error("invalid_request", "Неверный район", 422)
+    if okrug_id is not None and (not isinstance(okrug_id, str) or
+                                 not 0 < len(okrug_id.strip()) <= 100):
+        raise error("invalid_request", "Неверный округ", 422)
+    if max_noise_index is not None and (type(max_noise_index) is not int or
+                                        not 0 <= max_noise_index <= 100):
+        raise error("invalid_request", "Индекс шума должен быть от 0 до 100", 422)
+    district = district.strip() if district is not None else None
+    okrug_id = okrug_id.strip() if okrug_id is not None else None
+    overlay = menu.get("enrichment")
+    if overlay is None:
+        if any(value is not None for value in (district, okrug_id, max_noise_index)):
+            raise error("developer_enrichment_unavailable",
+                        "Фильтры округа, района и шума ещё подготавливаются", 503)
+        return {}
+    row = overlay["buildings"][registry_id]
+    if not row["visibility_eligible"]:
+        raise error("not_found", "Дом отсутствует в текущем наборе", 404)
+    if (district is not None and district.casefold() not in {
+            str(row.get("district_id") or "").casefold(),
+            str(row.get("district_name") or "").casefold()} or
+            okrug_id is not None and row.get("okrug_id") != okrug_id or
+            max_noise_index is not None and
+            (row.get("noise_index") is None or row["noise_index"] > max_noise_index)):
+        raise error("not_found", "Дом не подходит под выбранные условия", 404)
+    return {key: value for key, value in (("district", district),
+            ("okrug_id", okrug_id), ("max_noise_index", max_noise_index))
+            if value is not None}
 
 
 @app.get("/v1/developer-buildings/{registry_id}/floors")
-def developer_building_floors(registry_id: str) -> dict[str, Any]:
+def developer_building_floors(
+    registry_id: str,
+    district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
+    price_min_rub: int | None = None,
+    price_max_rub: int | None = None,
+    price_per_m2_min_rub: int | None = None,
+    price_per_m2_max_rub: int | None = None,
+    rooms: int | None = None,
+    area_min_m2: float | None = None,
+    area_max_m2: float | None = None,
+    unit_floor_min: int | None = None,
+    unit_floor_max: int | None = None,
+) -> dict[str, Any]:
     map_snapshot, menu = active_unit_menu()
     identity = _unit_identity(map_snapshot, menu, registry_id)
+    environment_filters = _menu_environment_filters(menu, registry_id, locals())
     map_run_id = identity["map_run_id"]
     units = menu["units_by_building"][registry_id]
+    filters = _menu_unit_filters(locals())
+    matched = developer_units.filter_units(units, filters)
+    matched_ids = {row["unit_id"] for row in matched}
     groups: dict[str | None, list[dict[str, Any]]] = {}
     for floor in menu["floors"].values():
         if floor["registry_id"] != registry_id:
@@ -1035,9 +1295,14 @@ def developer_building_floors(registry_id: str) -> dict[str, Any]:
         prepared = [developer_units.public_plan(plan)
                     for plan in menu["plans_by_floor"].get(floor["floor_id"], [])]
         plan = next((value for value in prepared if value is not None), None)
+        matching_count = sum(unit_id in matched_ids for unit_id in floor["unit_ids"])
+        if filters and matching_count == 0:
+            continue
         groups.setdefault(section, []).append({
             "floor_id": floor["floor_id"], "floor_number": floor["floor_number"],
-            "unit_count": len(floor["unit_ids"]),
+            "unit_count": matching_count,
+            "source_unit_count": len(floor["unit_ids"]),
+            "matching_unit_count": matching_count,
             "geometry_status": "source_plan_image" if plan else "none",
             "plan": plan,
         })
@@ -1057,16 +1322,43 @@ def developer_building_floors(registry_id: str) -> dict[str, Any]:
                            "total_floors": building["total_floors"],
                            "max_observed_unit_floor": building["max_observed_unit_floor"],
                            "sections": sections,
-                           "unassigned_unit_count": sum(row["floor_number"] is None for row in units)})
+                           "unassigned_unit_count": sum(row["floor_number"] is None for row in matched),
+                           "source_unassigned_unit_count": sum(row["floor_number"] is None
+                                                               for row in units),
+                           "matching_unassigned_unit_count": sum(row["floor_number"] is None
+                                                                 for row in matched),
+                           "matching_units_total": len(matched),
+                           "applied_filters": {**filters, **environment_filters}})
 
 
 @app.get("/v1/developer-buildings/{registry_id}/floors/{floor_id}")
-def developer_building_floor(registry_id: str, floor_id: str) -> dict[str, Any]:
+def developer_building_floor(
+    registry_id: str,
+    floor_id: str,
+    district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
+    price_min_rub: int | None = None,
+    price_max_rub: int | None = None,
+    price_per_m2_min_rub: int | None = None,
+    price_per_m2_max_rub: int | None = None,
+    rooms: int | None = None,
+    area_min_m2: float | None = None,
+    area_max_m2: float | None = None,
+    unit_floor_min: int | None = None,
+    unit_floor_max: int | None = None,
+) -> dict[str, Any]:
     map_snapshot, menu = active_unit_menu()
     identity = _unit_identity(map_snapshot, menu, registry_id)
+    environment_filters = _menu_environment_filters(menu, registry_id, locals())
     floor = menu["floors"].get(floor_id)
     if floor is None or floor["registry_id"] != registry_id:
         raise error("not_found", "Этаж отсутствует у выбранного дома", 404)
+    filters = _menu_unit_filters(locals())
+    matching_count = len(developer_units.filter_units(
+        [menu["units"][unit_id] for unit_id in floor["unit_ids"]], filters))
+    if filters and matching_count == 0:
+        raise error("not_found", "На этаже нет квартир по выбранным условиям", 404)
     prepared = [developer_units.public_plan(plan)
                 for plan in menu["plans_by_floor"].get(floor_id, [])]
     plan = next((value for value in prepared if value is not None), None)
@@ -1081,9 +1373,16 @@ def developer_building_floor(registry_id: str, floor_id: str) -> dict[str, Any]:
                                identity["map_run_id"], registry_id, floor["section_label"]),
                            "section_label": floor["section_label"],
                            "floor_number": floor["floor_number"],
-                           "unit_count": len(floor["unit_ids"]),
+                           "unit_count": matching_count,
+                           "source_unit_count": len(floor["unit_ids"]),
+                           "matching_unit_count": matching_count,
+                           "applied_filters": {**filters, **environment_filters},
                            "geometry_status": "source_plan_image" if plan else "none",
-                           "plan": plan, "plan_regions": plan_regions, "hotspots": []})
+                           "plan": plan, "plan_regions": plan_regions if not filters else [],
+                           "media": _public_developer_media(
+                               menu["enrichment"]["media_by_floor"].get(floor_id, []))
+                               if menu.get("enrichment") else [],
+                           "hotspots": []})
 
 
 @app.get("/v1/developer-buildings/{registry_id}/units")
@@ -1092,6 +1391,9 @@ def developer_building_units(
     section_id: str | None = Query(default=None, max_length=32),
     floor_id: str | None = Query(default=None, max_length=30),
     floor_known: bool | None = None,
+    district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
     price_min_rub: int | None = None,
     price_max_rub: int | None = None,
     price_per_m2_min_rub: int | None = None,
@@ -1106,6 +1408,7 @@ def developer_building_units(
 ) -> dict[str, Any]:
     map_snapshot, menu = active_unit_menu()
     identity = _unit_identity(map_snapshot, menu, registry_id)
+    environment_filters = _menu_environment_filters(menu, registry_id, locals())
     if floor_id is not None and floor_known is False:
         raise error("invalid_request", "Фильтры этажа противоречат друг другу", 422)
     floor = menu["floors"].get(floor_id) if floor_id is not None else None
@@ -1124,38 +1427,52 @@ def developer_building_units(
         rows = [row for row in rows if row["unit_id"] in floor["unit_ids"]]
     if floor_known is not None:
         rows = [row for row in rows if (row["floor_number"] is not None) == floor_known]
-    try:
-        unit_filters = developer_units.normalize_unit_filters(
-            price_min_rub=price_min_rub, price_max_rub=price_max_rub,
-            price_per_m2_min_rub=price_per_m2_min_rub,
-            price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
-            area_min_m2=area_min_m2, area_max_m2=area_max_m2,
-            unit_floor_min=unit_floor_min, unit_floor_max=unit_floor_max)
-    except ValueError as exc:
-        raise error("invalid_request", str(exc), 422) from exc
+    unit_filters = _menu_unit_filters(locals())
     rows = developer_units.filter_units(rows, unit_filters)
     rows = sorted(rows, key=lambda row: (row["floor_number"] is None,
                                         row["floor_number"] if row["floor_number"] is not None else 0,
                                         row["section_label"] or "", row["unit_number"] or "",
                                         row["unit_id"]))
     return public_payload({**identity, "total": len(rows), "limit": limit, "offset": offset,
-                           "applied_filters": unit_filters,
+                           "applied_filters": {**unit_filters, **environment_filters},
                            "items": [developer_units.public_unit(
                                row, identity["map_run_id"],
-                               menu["plans_by_unit"].get(row["unit_id"], []))
+                               menu["plans_by_unit"].get(row["unit_id"], [])) |
+                               _public_unit_enrichment(menu, row)
                                for row in rows[offset:offset + limit]]})
 
 
 @app.get("/v1/developer-buildings/{registry_id}/units/{unit_id}")
-def developer_building_unit(registry_id: str, unit_id: str) -> dict[str, Any]:
+def developer_building_unit(
+    registry_id: str,
+    unit_id: str,
+    district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
+    price_min_rub: int | None = None,
+    price_max_rub: int | None = None,
+    price_per_m2_min_rub: int | None = None,
+    price_per_m2_max_rub: int | None = None,
+    rooms: int | None = None,
+    area_min_m2: float | None = None,
+    area_max_m2: float | None = None,
+    unit_floor_min: int | None = None,
+    unit_floor_max: int | None = None,
+) -> dict[str, Any]:
     map_snapshot, menu = active_unit_menu()
     identity = _unit_identity(map_snapshot, menu, registry_id)
+    environment_filters = _menu_environment_filters(menu, registry_id, locals())
     row = menu["units"].get(unit_id)
     if row is None or row["registry_id"] != registry_id:
         raise error("not_found", "Квартира отсутствует у выбранного дома", 404)
+    filters = _menu_unit_filters(locals())
+    if filters and not developer_units.filter_units([row], filters):
+        raise error("not_found", "Квартира не подходит под выбранные условия", 404)
     plans = menu["plans_by_unit"].get(unit_id, [])
     return public_payload({**identity,
                            **developer_units.public_unit(row, identity["map_run_id"], plans),
+                           **_public_unit_enrichment(menu, row),
+                           "applied_filters": {**filters, **environment_filters},
                            "plans": [value for plan in plans
                                      if (value := developer_units.public_plan(plan)) is not None]})
 
@@ -1170,6 +1487,60 @@ def developer_unit_asset(sha256: str) -> Response:
     except (OSError, ValueError) as exc:
         raise error("unit_asset_unavailable", "Подготовленный план временно недоступен", 503) from exc
     return Response(content, media_type=mime,
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff",
+                             "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+
+@app.get("/v1/developer-media/{media_id}")
+def developer_media_asset(media_id: str) -> Response:
+    """Materialize one exact, snapshot-listed plan or project image as PNG."""
+    map_snapshot, menu = active_unit_menu()
+    del map_snapshot
+    overlay = menu.get("enrichment")
+    if overlay is None:
+        raise error("not_found", "Изображение отсутствует в текущем наборе", 404)
+    row = overlay["media"].get(media_id)
+    if row is None:
+        raise error("not_found", "Изображение отсутствует в текущем наборе", 404)
+    _menu_environment_filters(menu, row["registry_id"], {})
+    if row.get("prepared_source") == "menu_asset":
+        try:
+            content, mime = developer_units.asset_bytes(menu, row["prepared_sha256"])
+        except (OSError, ValueError, FileNotFoundError) as exc:
+            raise error("developer_media_unavailable",
+                        "Изображение временно недоступно", 503) from exc
+        if (mime != "image/png" or
+                len(content) != row.get("prepared_bytes")):
+            raise error("developer_media_unavailable",
+                        "Изображение временно недоступно", 503)
+        media_type = mime
+    else:
+        try:
+            from backend.developer_media_cache import MediaCacheError, get_or_prepare
+        except ImportError as exc:
+            raise error("developer_media_unavailable",
+                        "Изображение временно недоступно", 503) from exc
+        try:
+            prepared = get_or_prepare(
+                row, cache_root=ROOT / "data/runtime/developer_media/cache")
+            if (prepared is None or prepared.path is None or
+                    prepared.mime_type not in {"image/png", "image/jpeg"} or
+                    prepared.sha256 is None):
+                raise MediaCacheError("prepared_media_missing")
+            content = prepared.path.read_bytes()
+            if (len(content) != prepared.byte_length or
+                    hashlib.sha256(content).hexdigest() != prepared.sha256):
+                raise MediaCacheError("prepared_media_hash_mismatch")
+            media_type = prepared.mime_type
+        except MediaCacheError as exc:
+            LOGGER.warning("Developer media unavailable: %s", exc.code)
+            raise error("developer_media_unavailable",
+                        "Изображение временно недоступно", 503) from exc
+        except OSError as exc:
+            raise error("developer_media_unavailable",
+                        "Изображение временно недоступно", 503) from exc
+    return Response(content, media_type=media_type,
                     headers={"Cache-Control": "private, max-age=0, must-revalidate",
                              "X-Content-Type-Options": "nosniff",
                              "Content-Security-Policy": "default-src 'none'; sandbox"})
@@ -1194,8 +1565,11 @@ def developer_building_model(registry_id: str) -> dict[str, Any]:
     map_snapshot, menu, model_run = active_selected_models()
     if registry_id not in map_snapshot["by_registry"]:
         raise error("not_found", "Дом отсутствует в текущем наборе", 404)
-    return public_payload(developer_models.public_model(
-        map_snapshot, registry_id, model_run, menu["manifest"]["run_id"]))
+    _menu_environment_filters(menu, registry_id, {})
+    return public_payload({**developer_models.public_model(
+        map_snapshot, registry_id, model_run, menu["manifest"]["run_id"]),
+        "enrichment_run_id": (menu["enrichment"]["manifest"]["run_id"]
+                              if menu.get("enrichment") else None)})
 
 
 @app.get("/v1/developer-model-assets/{sha256}")
@@ -1255,6 +1629,8 @@ def registry_map(
     status: str | None = Query(default=None, max_length=200),
     kind: str | None = Query(default=None, max_length=80),
     district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -1275,15 +1651,16 @@ def registry_map(
 ) -> dict[str, Any]:
     developer_snapshot = active_developer_map()
     if developer_snapshot is not None:
-        _developer_filters(status=status, kind=kind, district=district,
+        _developer_filters(status=status, kind=kind,
                            handover_year=handover_year, handover_quarter=handover_quarter,
                            floors_min=floors_min, floors_max=floors_max,
                            walk_metro_max_min=walk_metro_max_min,
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied = _developer_list(
-            developer_snapshot, query, price_min_rub=price_min_rub,
+        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+            developer_snapshot, query, district=district, okrug_id=okrug_id,
+            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -1295,9 +1672,11 @@ def registry_map(
             "dataset_id": "developer_building_registry", "snapshot_id": manifest["snapshot_id"],
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
+            "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
             "center": [37.620, 55.750], "tilesets": background_tilesets(load_catalogue()),
             "items": [{**developer_map.public_building(row),
+                       **_developer_public_environment(row, overlay),
                        "matching_units_count": unit_counts[row["registry_id"]]}
                       for row in mapped],
             "counts": {"records": len(selected), "geocoded": len(mapped), "offers": 0,
@@ -1306,6 +1685,7 @@ def registry_map(
             "applied_filters": applied,
         })
     _legacy_unit_filter_guard(
+        okrug_id=okrug_id, max_noise_index=max_noise_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,

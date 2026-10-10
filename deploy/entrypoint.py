@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import json
 import os
 import sys
@@ -11,6 +12,76 @@ from pathlib import Path, PurePosixPath
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+ROUTING_INPUT_FILES = (
+    "data/social/osm_moscow_roads_261008.parquet",
+    "data/social/osm_moscow_roads_261008.manifest.json",
+    "data/social/osm_moscow_water_261008_v2.parquet",
+    "data/social/osm_moscow_waterways_261008_v2.parquet",
+    "data/social/osm_moscow_parks_261008_v2.parquet",
+    "data/social/osm_moscow_surfaces_261008_v2.manifest.json",
+)
+
+
+def verify_routing_inputs(root: Path, hashes: dict[str, str] | None = None) -> dict[str, str]:
+    """Require the same pinned connector/barrier/park sources in every runtime.
+
+    ``hashes`` must come from a complete release byte verification. Container
+    preflight omits it and hashes the input files itself.
+    """
+    def checked(relative: str) -> Path:
+        path = root
+        for part in PurePosixPath(relative).parts:
+            path /= part
+            if path.is_symlink():
+                raise ValueError(f"Routing input contains a symlink: {relative}")
+        if not path.is_file() or (hashes is not None and relative not in hashes):
+            raise ValueError(f"Missing pinned routing input: {relative}")
+        return path
+
+    def document(relative: str) -> dict:
+        path = checked(relative)
+        if path.stat().st_size > 1_000_000:
+            raise ValueError(f"Routing manifest exceeds its bound: {relative}")
+        result = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(result, dict):
+            raise ValueError(f"Invalid routing manifest: {relative}")
+        return result
+
+    def digest(relative: str) -> str:
+        path = checked(relative)
+        if hashes is not None:
+            return hashes[relative]
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+
+    for relative in ROUTING_INPUT_FILES:
+        checked(relative)
+    poi = document("data/social/osm_moscow_social_pois_261008.manifest.json")
+    roads = document("data/social/osm_moscow_roads_261008.manifest.json")
+    surfaces = document("data/social/osm_moscow_surfaces_261008_v2.manifest.json")
+    graph = document("data/social/valhalla_moscow/build_manifest.json")
+    source_sha = poi.get("source", {}).get("sha256")
+    if (not isinstance(source_sha, str) or len(source_sha) != 64
+            or any(char not in "0123456789abcdef" for char in source_sha)
+            or any(item.get("source", {}).get("sha256") != source_sha
+                   for item in (roads, surfaces, graph))):
+        raise ValueError("Routing POI, roads, barriers, parks and graph source snapshots differ")
+    revisions = {"source_sha256": source_sha}
+    for label, relative, descriptor in (
+        ("pois", "data/social/osm_moscow_social_pois_261008.parquet", poi.get("output", {})),
+        ("roads", ROUTING_INPUT_FILES[0], roads.get("output", {})),
+        ("water", ROUTING_INPUT_FILES[2], surfaces.get("layers", {}).get("water", {})),
+        ("waterways", ROUTING_INPUT_FILES[3], surfaces.get("layers", {}).get("waterways", {})),
+        ("parks", ROUTING_INPUT_FILES[4], surfaces.get("layers", {}).get("parks", {})),
+    ):
+        if (not isinstance(descriptor, dict) or descriptor.get("file") != relative
+                or descriptor.get("sha256") != digest(relative)):
+            raise ValueError(f"Routing {label} bytes or path differ from source manifest")
+        revisions[f"{label}_sha256"] = descriptor["sha256"]
+    config = "data/social/valhalla_moscow/valhalla_pedestrian.json"
+    if graph.get("builder", {}).get("config_sha256") != digest(config):
+        raise ValueError("Walking graph configuration differs from its build manifest")
+    return revisions
 
 
 def preflight() -> dict[str, int | str]:
@@ -28,6 +99,7 @@ def preflight() -> dict[str, int | str]:
         importlib.import_module(module)
 
     sys.path.insert(0, str(APP_ROOT))
+    routing = verify_routing_inputs(APP_ROOT)
     from backend.developer_experience import resolve_active as load_developer_experience
     from backend.developer_map import resolve_active as load_developer_map
     from backend.models import load_model_run
@@ -101,7 +173,10 @@ def preflight() -> dict[str, int | str]:
             "developer_map_points": developer_manifest["map_points_total"],
             "unit_run_id": menu["manifest"]["run_id"],
             "selected_model_run_id": selected_models["manifest"]["run_id"],
-            "selected_models": len(selected_models["by_registry"])}
+            "selected_models": len(selected_models["by_registry"]),
+            "enrichment_run_id": (menu.get("enrichment") or {}).get("manifest", {}).get("run_id", "none"),
+            "routing_roads_sha256": routing["roads_sha256"],
+            "routing_parks_sha256": routing["parks_sha256"]}
 
 
 def main() -> None:

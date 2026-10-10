@@ -24,11 +24,14 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from deploy.entrypoint import ROUTING_INPUT_FILES, verify_routing_inputs
 MODEL_RUN_RE = re.compile(r"models-v1-[0-9a-f]{16}")
 DEVELOPER_RUN_RE = re.compile(r"developer-map-v1-[0-9a-f]{16}")
 DEVELOPER_SNAPSHOT_RE = re.compile(r"developer-map-snapshot-[0-9a-f]{16}")
 DEVELOPER_UNITS_RUN_RE = re.compile(r"developer-units-v1-[0-9a-f]{16}")
 DEVELOPER_MODELS_RUN_RE = re.compile(r"developer-models-v1-[0-9a-f]{16}")
+DEVELOPER_ENRICHMENT_RUN_RE = re.compile(r"developer-enrichment-v1-[0-9a-f]{16}")
 VISIBILITY_RUN_RE = re.compile(r"visibility-v1-[0-9a-f]{16}")
 GENERATION_RE = re.compile(r"generation-[0-9a-f]{16}")
 SNAPSHOT_RE = re.compile(r"data/property/estateline/normalized/snapshots/estate-[0-9a-f]{16}")
@@ -54,7 +57,7 @@ DATA_FILES = (
     "data/city/overture_moscow_cityclipped_2026-09-23.1.manifest.json",
     "data/city/environment/moscow_district_candidates_2026-09-23.1.geojson",
     "data/city/environment/moscow_district_candidates_2026-09-23.1.manifest.json",
-)
+) + ROUTING_INPUT_FILES
 
 
 @dataclass(frozen=True)
@@ -144,8 +147,11 @@ def developer_experience_files(source_root: Path) -> list[str]:
         "schema_version", "map_run_id", "map_snapshot_id", "map_manifest_sha256",
         "unit_run_id", "unit_manifest_sha256", "model_run_id", "model_manifest_sha256",
     }
+    version = pointer.get("schema_version")
+    if version == "developer-experience-pointer/2":
+        expected_keys |= {"enrichment_run_id", "enrichment_manifest_sha256"}
     if (set(pointer) != expected_keys
-            or pointer.get("schema_version") != "developer-experience-pointer/1"):
+            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2"}):
         raise ValueError("Invalid active developer-experience pointer")
     identity_patterns = {
         "map_run_id": DEVELOPER_RUN_RE,
@@ -163,7 +169,8 @@ def developer_experience_files(source_root: Path) -> list[str]:
     # The map reader retains its own pointer. The unified pointer must pin it
     # exactly, while menu and selected models have no independent active files.
     for stale_pointer in ("data/property/developer_units/active.json",
-                          "data/property/developer_models/active.json"):
+                          "data/property/developer_models/active.json",
+                          "data/property/developer_enrichment/active.json"):
         if (source_root / stale_pointer).exists() or (source_root / stale_pointer).is_symlink():
             raise ValueError("Separate unit/model active pointers are not accepted")
     developer_map_files(source_root)
@@ -293,10 +300,110 @@ def developer_experience_files(source_root: Path) -> list[str]:
                     or int.from_bytes(header[8:12], "little") != row["asset_bytes"]):
                 raise ValueError("Selected model asset is not a complete GLB")
             relatives.append(relative)
+    if version == "developer-experience-pointer/2":
+        relatives.extend(developer_enrichment_files(source_root, pointer))
+    return relatives
+
+
+def developer_enrichment_files(source_root: Path, pointer: dict[str, Any],
+                               hashes: dict[str, str] | None = None) -> list[str]:
+    """Bind optional enrichment and prepared media to the exact experience.
+
+    Lazy media caches and producer input snapshots are not runtime release
+    assets. Existing menu assets stay in their already-pinned menu run.
+    """
+    run_id, manifest_sha = pointer.get("enrichment_run_id"), pointer.get("enrichment_manifest_sha256")
+    if (not isinstance(run_id, str) or DEVELOPER_ENRICHMENT_RUN_RE.fullmatch(run_id) is None
+            or not isinstance(manifest_sha, str) or re.fullmatch(r"[a-f0-9]{64}", manifest_sha) is None):
+        raise ValueError("Invalid enrichment pointer identity")
+    prefix = f"data/property/developer_enrichment/runs/{run_id}"
+    relatives = [f"{prefix}/manifest.json"]
+    def checked(relative: str, expected_sha: Any, limit: int) -> Path:
+        path = _safe_source_file(source_root, relative)
+        actual = hashes.get(relative) if hashes is not None else _sha256_file(path)
+        if (not isinstance(expected_sha, str) or re.fullmatch(r"[a-f0-9]{64}", expected_sha) is None
+                or path.stat().st_size > limit or actual != expected_sha):
+            raise ValueError(f"Enrichment file missing, oversized or hash mismatch: {relative}")
+        return path
+    manifest = _json(checked(relatives[0], manifest_sha, 128_000))
+    identity = {key: pointer[key] for key in (
+        "map_run_id", "map_snapshot_id", "map_manifest_sha256", "unit_run_id",
+        "unit_manifest_sha256", "model_run_id", "model_manifest_sha256")}
+    if (manifest.get("schema_version") != "developer-enrichment-snapshot/1"
+            or manifest.get("run_id") != run_id
+            or any(manifest.get(key) != value for key, value in identity.items())):
+        raise ValueError("Enrichment snapshot differs from the pinned experience")
+    if any(value is not None and (not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None)
+           for key, value in manifest.items() if key.endswith("_sha256")):
+        raise ValueError("Invalid enrichment source evidence SHA")
+    menu_prefix = f"data/property/developer_units/runs/{pointer['unit_run_id']}"
+    menu = _json(_safe_source_file(source_root, f"{menu_prefix}/manifest.json"))
+    if any(manifest.get(f"{key}_total") != menu.get(f"{key}_total") for key in ("buildings", "units")):
+        raise ValueError("Enrichment counts differ from the pinned menu")
+    for name, limit in (("buildings", 5_000_000), ("units", 90_000_000), ("media", 110_000_000)):
+        relative = f"{prefix}/{name}.jsonl"
+        path = checked(relative, manifest.get(f"{name}_sha256"), limit)
+        count = manifest.get(f"{name}_total")
+        if type(count) is not int or count < 0 or _line_count(path) != count:
+            raise ValueError(f"Enrichment {name} row count differs from manifest")
+        relatives.append(relative)
+    menu_assets = set()
+    with _safe_source_file(source_root, f"{menu_prefix}/plans.jsonl").open(encoding="utf-8") as stream:
+        for line in stream:
+            row = json.loads(line)
+            if row.get("asset_sha256"):
+                menu_assets.add((row["asset_sha256"], row.get("asset_mime")))
+    extensions = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+    asset_inventory = manifest.get("assets", [])
+    if not isinstance(asset_inventory, list):
+        raise ValueError("Invalid prepared enrichment asset inventory")
+    prepared = {}
+    for asset in asset_inventory:
+        if (not isinstance(asset, dict) or set(asset) != {"sha256", "mime", "bytes"}
+                or not isinstance(asset["sha256"], str) or re.fullmatch(r"[a-f0-9]{64}", asset["sha256"]) is None
+                or asset["mime"] not in extensions or type(asset["bytes"]) is not int
+                or not 0 < asset["bytes"] <= 10_000_000 or asset["sha256"] in prepared):
+            raise ValueError("Invalid prepared enrichment asset descriptor")
+        prepared[asset["sha256"]] = asset
+    used = set()
+    with _safe_source_file(source_root, f"{prefix}/media.jsonl").open(encoding="utf-8") as stream:
+        for line in stream:
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError("Invalid enrichment media row")
+            digest, mime, size, source = (row.get(f"prepared_{key}") for key in ("sha256", "mime", "bytes", "source"))
+            if all(value is None for value in (digest, mime, size, source)):
+                continue
+            if (not isinstance(digest, str) or re.fullmatch(r"[a-f0-9]{64}", digest) is None
+                    or mime not in extensions or type(size) is not int or not 0 < size <= 10_000_000):
+                raise ValueError("Invalid enrichment prepared media reference")
+            if source == "menu_asset" and (digest, mime) in menu_assets:
+                asset_prefix = menu_prefix
+            elif source == "enrichment_asset" and prepared.get(digest) == {"sha256": digest, "mime": mime, "bytes": size}:
+                asset_prefix = prefix
+                used.add(digest)
+            else:
+                raise ValueError("Unknown or unpinned enrichment prepared media source")
+            relative = f"{asset_prefix}/assets/{digest}{extensions[mime]}"
+            if checked(relative, digest, 10_000_000).stat().st_size != size:
+                raise ValueError("Prepared enrichment media size differs from its reference")
+            if source == "enrichment_asset":
+                with _safe_source_file(source_root, relative).open("rb") as image:
+                    signature = image.read(12)
+                if not ((mime == "image/png" and signature.startswith(b"\x89PNG\r\n\x1a\n"))
+                        or (mime == "image/jpeg" and signature.startswith(b"\xff\xd8\xff"))
+                        or (mime == "image/webp" and signature.startswith(b"RIFF") and signature[8:12] == b"WEBP")):
+                    raise ValueError("Prepared enrichment asset MIME differs from bytes")
+    if used != set(prepared):
+        raise ValueError("Prepared enrichment asset inventory has unreferenced files")
+    relatives.extend(f"{prefix}/assets/{sha}{extensions[prepared[sha]['mime']]}" for sha in sorted(used))
     return relatives
 
 
 def _safe_source_file(root: Path, relative: str) -> Path:
+    if (not isinstance(relative, str) or "\\" in relative or "\0" in relative
+            or relative.startswith("/") or any(p in {"", ".", ".."} for p in relative.split("/"))):
+        raise ValueError(f"Unsafe release path: {relative}")
     parts = PurePosixPath(relative).parts
     if not parts or any(part in {"", ".", ".."} or part.startswith(".") for part in parts):
         raise ValueError(f"Unsafe release path: {relative}")
@@ -401,6 +508,7 @@ def make_plan(source_root: Path, profile: str) -> tuple[list[PlannedFile], dict[
     if profile not in {"current-only", "full-compat"}:
         raise ValueError("Unknown release profile")
     source_root = source_root.resolve(strict=True)
+    verify_routing_inputs(source_root)
     pointer = _json(_safe_source_file(source_root, "assets/manifest.json"))
     if pointer.get("public_redacted_source_ids") is not True:
         raise ValueError("Asset pointer lacks public redaction gate")
@@ -471,6 +579,7 @@ def make_plan(source_root: Path, profile: str) -> tuple[list[PlannedFile], dict[
         "nearby": list(DATA_FILES[3:11]),
         "coverage": [DATA_FILES[11]],
         "mapped_districts": list(DATA_FILES[12:14]),
+        "routing_inputs": list(ROUTING_INPUT_FILES),
         "models_private": ([] if generation_bundle else ["data/models/active.json"])
         + [f"data/models/{run_id}/{name}" for name in run_files],
     }
@@ -588,14 +697,23 @@ def _copy_hash(source: Path, target: Path, expected: PlannedFile) -> str:
 
 
 def apply_plan(source_root: Path, output: Path, profile: str,
-               planned: list[PlannedFile], pointer: dict[str, Any]) -> Path:
+               planned: list[PlannedFile], pointer: dict[str, Any], *,
+               base_release: Path | None = None,
+               base_manifest_sha256: str | None = None) -> Path:
     source_root = source_root.resolve(strict=True)
     output = output.absolute()
-    if output.exists():
+    if output.exists() or output.is_symlink():
         raise FileExistsError(f"Release output already exists: {output}")
     if output.is_relative_to(source_root / "data") or output.is_relative_to(source_root / "assets"):
         raise ValueError("Release output cannot be inside runtime inputs")
     output.parent.mkdir(parents=True, exist_ok=True)
+    base_files: dict[str, dict[str, Any]] = {}
+    if (base_release is None) != (base_manifest_sha256 is None):
+        raise ValueError("Base release and its manifest SHA must be supplied together")
+    if base_release is not None:
+        from scripts.runtime_delta import checked_base
+        base_release, base_manifest = checked_base(base_release, base_manifest_sha256)
+        base_files = {row["path"]: row for row in base_manifest["files"]}
     staged = Path(tempfile.mkdtemp(prefix=".deploy-release-", dir=output.parent))
     try:
         records: list[dict[str, Any]] = []
@@ -610,7 +728,26 @@ def apply_plan(source_root: Path, output: Path, profile: str,
                 digest = hashlib.sha256(body).hexdigest()
                 size = len(body)
             else:
-                digest = _copy_hash(_safe_source_file(source_root, item.relative), target, item)
+                source = _safe_source_file(source_root, item.relative)
+                base_row = base_files.get(item.relative)
+                # Verify current source bytes before reusing immutable base
+                # files. Never open or chmod a linked base inode for writing.
+                if base_row is not None and base_row["bytes"] == item.bytes:
+                    before = source.stat()
+                    digest = _sha256_file(source)
+                    after = source.stat()
+                    if ((before.st_size, before.st_mtime_ns) != (item.bytes, item.mtime_ns)
+                            or (after.st_size, after.st_mtime_ns, after.st_ino, after.st_ctime_ns)
+                            != (before.st_size, before.st_mtime_ns, before.st_ino, before.st_ctime_ns)):
+                        raise ValueError(f"Source changed before reuse: {item.relative}")
+                    if digest == base_row["sha256"]:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        os.link(_safe_source_file(base_release, item.relative), target,
+                                follow_symlinks=False)
+                    else:
+                        digest = _copy_hash(source, target, item)
+                else:
+                    digest = _copy_hash(source, target, item)
                 size = item.bytes
             records.append({"path": item.relative, "sha256": digest,
                             "bytes": size, "group": item.group})
@@ -633,7 +770,8 @@ def apply_plan(source_root: Path, output: Path, profile: str,
         (staged / "release-manifest.json").chmod(0o644)
         from deploy.apply_release import verify_release as verify_deploy_release
         verify_deploy_release(staged)
-        staged.rename(output)
+        from scripts.runtime_transport import _rename_noreplace
+        _rename_noreplace(staged, output)
     except BaseException:
         shutil.rmtree(staged)
         raise
@@ -695,6 +833,7 @@ def verify_release(output: Path) -> dict[str, Any]:
     required_experience = developer_experience_files(output)
     if not set(required_experience).issubset(expected):
         raise ValueError("Release omits the active developer experience")
+    verify_routing_inputs(output, {row["path"]: row["sha256"] for row in records})
     return manifest
 
 
@@ -704,6 +843,9 @@ def main() -> int:
     parser.add_argument("--profile", choices=("current-only", "full-compat"),
                         default="full-compat")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--base-release", type=Path,
+                        help="reuse byte-identical files from a pinned immutable release")
+    parser.add_argument("--base-manifest-sha256")
     parser.add_argument("--apply", action="store_true", help="copy after dry-run review")
     parser.add_argument("--verify", action="store_true", help="verify an existing release")
     args = parser.parse_args()
@@ -711,6 +853,10 @@ def main() -> int:
         parser.error("--apply and --verify require --output")
     if args.apply and args.verify:
         parser.error("--apply and --verify are separate operations")
+    if (args.base_release is None) != (args.base_manifest_sha256 is None):
+        parser.error("--base-release requires --base-manifest-sha256 and vice versa")
+    if args.verify and args.base_release is not None:
+        parser.error("--verify does not accept a base release")
     if args.verify:
         manifest = verify_release(args.output)
         print(json.dumps({"verified": True, "profile": manifest["profile"],
@@ -731,7 +877,9 @@ def main() -> int:
                      ensure_ascii=False, sort_keys=True, indent=2))
     if args.apply:
         validate_current_source(args.source_root)
-        path = apply_plan(args.source_root, args.output, args.profile, planned, pointer)
+        path = apply_plan(args.source_root, args.output, args.profile, planned, pointer,
+                          base_release=args.base_release,
+                          base_manifest_sha256=args.base_manifest_sha256)
         print(f"Release ready: {path}")
     return 0
 

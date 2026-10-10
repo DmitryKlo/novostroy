@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -16,6 +17,14 @@ def pointer(unit: str, model: str) -> dict:
             "map_manifest_sha256": "a" * 64,
             "unit_run_id": unit, "unit_manifest_sha256": "b" * 64,
             "model_run_id": model, "model_manifest_sha256": "c" * 64}
+
+
+def enriched_pointer(unit: str, model: str, enrichment: str) -> dict:
+    value = pointer(unit, model)
+    value.update({"schema_version": experience.POINTER_SCHEMA_V2,
+                  "enrichment_run_id": enrichment,
+                  "enrichment_manifest_sha256": "d" * 64})
+    return value
 
 
 class DeveloperExperienceTest(unittest.TestCase):
@@ -48,6 +57,32 @@ class DeveloperExperienceTest(unittest.TestCase):
                                    expected_active_sha=first_sha, base=base)
                 experience.rollback(expected_active_sha=experience.pointer_sha(base), base=base)
             self.assertEqual(experience.pointer_sha(base), first_sha)
+
+    def test_v2_commit_and_rollback_keep_exact_v1_generation(self) -> None:
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            with patch.object(experience, "_verify_bundle", side_effect=[
+                    pointer("units1", "models1"),
+                    enriched_pointer("units1", "models1", "enrichment1"),
+                    pointer("units1", "models1")]) as verify:
+                experience.publish("map", "units1", "models1",
+                                   expected_active_sha=experience.pointer_sha(base), base=base)
+                previous_sha = experience.pointer_sha(base)
+                experience.publish("map", "units1", "models1",
+                                   enrichment_run_id="enrichment1",
+                                   expected_enrichment_manifest_sha="d" * 64,
+                                   expected_active_sha=previous_sha, base=base)
+                self.assertEqual(
+                    json.loads((base / "active.json").read_text(encoding="utf-8"))[
+                        "schema_version"], experience.POINTER_SCHEMA_V2)
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    experience.publish("map", "units1", "models1",
+                                       enrichment_run_id="enrichment2",
+                                       expected_enrichment_manifest_sha="e" * 64,
+                                       expected_active_sha=previous_sha, base=base)
+                experience.rollback(expected_active_sha=experience.pointer_sha(base), base=base)
+                self.assertEqual(experience.pointer_sha(base), previous_sha)
+                self.assertEqual(verify.call_count, 3)
 
 
 if __name__ == "__main__":

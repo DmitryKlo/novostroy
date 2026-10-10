@@ -49,7 +49,7 @@ def _sha256_file(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
-def _load_transport_manifest(path: Path) -> dict[str, Any]:
+def _load_transport_manifest(path: Path, *, schema: str = "novostroy-runtime-transport/1") -> dict[str, Any]:
     if path.is_symlink() or not path.is_file():
         raise TransportError("Transport manifest must be a regular file")
     if path.stat().st_size > 100_000:
@@ -58,7 +58,7 @@ def _load_transport_manifest(path: Path) -> dict[str, Any]:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise TransportError("Transport manifest is not valid UTF-8 JSON") from exc
-    if not isinstance(document, dict) or document.get("schema_version") != "novostroy-runtime-transport/1":
+    if not isinstance(document, dict) or document.get("schema_version") != schema:
         raise TransportError("Unsupported transport manifest schema")
     archive = document.get("archive")
     release = document.get("release")

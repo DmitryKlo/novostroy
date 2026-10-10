@@ -30,6 +30,7 @@ type Props = {
 }
 
 const MOSCOW: [number, number] = [37.6176, 55.7558]
+const corpusCount = (count: number) => `${count.toLocaleString('ru-RU')} ${new Intl.PluralRules('ru-RU').select(count) === 'one' ? 'корпус' : new Intl.PluralRules('ru-RU').select(count) === 'few' ? 'корпуса' : 'корпусов'} с точкой`
 const NO_NEARBY_ITEMS: { layer: NearbyCategory; item: NearbyPoi }[] = []
 const MIB = 1024 * 1024
 const CACHE_OVERFLOW_BYTES = 2 * MIB
@@ -102,6 +103,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   const onSelectRef = useRef(onSelect)
   const selectedIdRef = useRef(selectedId)
   const selectedModelVisibleRef = useRef(false)
+  const selectedModelTexturesReadyRef = useRef(false)
   const selectedModelPrimitiveRef = useRef<Cesium.Model | null>(null)
   const onSelectNearbyRef = useRef(onSelectNearby)
   const onViewportRef = useRef(onViewport)
@@ -177,13 +179,6 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     if (selectedModelVisibleRef.current === shown) return
     selectedModelVisibleRef.current = shown
     onSelectedModelVisibleRef.current?.(shown)
-    const overlayReady = !groundGateRef.current || groundGateRef.current.overlayStarted
-    for (const tile of dataRef.current?.tilesets ?? []) {
-      if (tile.kind !== 'city_volumes') continue
-      const loaded = tilesRef.current.get(tile.url)
-      if (loaded) loaded.show = !shown && visibleRef.current && overlayReady
-        && cityAtScaleRef.current && qualityAllows(tile.kind, qualityRef.current.stage)
-    }
     if (visibleRef.current) viewer.scene.requestRender()
   }
   const applyQuality = (viewer: Cesium.Viewer) => {
@@ -199,7 +194,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       const existing = tilesRef.current.get(tile.url)
       if (!existing) continue
       existing.show = visibleRef.current && overlayReady && qualityAllows(tile.kind, stage)
-        && (tile.kind !== 'city_volumes' || (cityAtScaleRef.current && !selectedModelVisibleRef.current))
+        && (tile.kind !== 'city_volumes' || cityAtScaleRef.current)
       if (tile.kind === 'city_volumes' && (cityStageRef.current?.tile !== existing || cityStageRef.current.silhouetteReady))
         existing.maximumScreenSpaceError = citySseForQuality(stage)
     }
@@ -334,7 +329,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     for (const tile of dataRef.current?.tilesets ?? []) {
       if (tile.kind !== 'city_volumes') continue
       const existing = tilesRef.current.get(tile.url)
-      if (existing) existing.show = visibleRef.current && next && !selectedModelVisibleRef.current && (!groundGateRef.current || groundGateRef.current.overlayStarted)
+      if (existing) existing.show = visibleRef.current && next && (!groundGateRef.current || groundGateRef.current.overlayStarted)
         && qualityAllows(tile.kind, qualityRef.current.stage)
     }
     if (visibleRef.current) viewer.scene.requestRender()
@@ -530,7 +525,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
             selectedCount: ((tilesRef.current.get(tile.url) as unknown as { _selectedTiles?: unknown[] } | undefined)?._selectedTiles?.length ?? 0),
           })) ?? [],
           volumeStage: () => ({ ...volumeEventsRef.current }),
-          selectedModelState: () => ({ loaded: Boolean(selectedModelPrimitiveRef.current?.ready), visible: selectedModelVisibleRef.current,
+          selectedModelState: () => ({ loaded: Boolean(selectedModelPrimitiveRef.current?.ready), texturesReady: selectedModelTexturesReadyRef.current, visible: selectedModelVisibleRef.current,
             cityVolumes: (dataRef.current?.tilesets.filter((tile) => tile.kind === 'city_volumes') ?? []).map((tile) => ({
               loaded: tilesRef.current.has(tile.url), shown: tilesRef.current.get(tile.url)?.show ?? false,
               expectedWithoutSelection: visibleRef.current && cityAtScaleRef.current
@@ -568,7 +563,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       observer?.disconnect(); handler?.destroy(); removeFrameListener?.(); removeGroundFrameListener?.(); removeVisibilityListener?.()
       stopProbe('viewer_destroyed')
       cityStageRef.current?.remove(); cityStageRef.current = null
-      selectedModelPrimitiveRef.current = null; selectedModelVisibleRef.current = false
+      selectedModelPrimitiveRef.current = null; selectedModelVisibleRef.current = false; selectedModelTexturesReadyRef.current = false
       delete (window as unknown as { __novoMapTest?: unknown }).__novoMapTest
       loadLedgerRef.current.reset()
       viewerRef.current = null
@@ -622,6 +617,8 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     const center = Cesium.Matrix4.getTranslation(matrix, new Cesium.Cartesian3())
     let disposed = false
     let attached: Cesium.Model | null = null
+    let removeTexturesReady: (() => void) | null = null
+    selectedModelTexturesReadyRef.current = false
     const syncVisibility = () => {
       if (disposed || !attached || viewerRef.current !== viewer) return
       const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, center)
@@ -630,9 +627,13 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       setSelectedModelVisible(viewer, Boolean(attached.ready && onScreen && visibleRef.current && document.visibilityState !== 'hidden'))
     }
     const removeRender = viewer.scene.postRender.addEventListener(syncVisibility)
-    void Cesium.Model.fromGltfAsync({ url: modelData.asset_url, modelMatrix: matrix,
+    void Cesium.Model.fromGltfAsync({ url: modelData.asset_url, modelMatrix: matrix, forwardAxis: Cesium.Axis.X,
       incrementallyLoadTextures: true, allowPicking: false, shadows: Cesium.ShadowMode.DISABLED }).then((model) => {
       if (disposed || viewerRef.current !== viewer) { model.destroy(); return }
+      removeTexturesReady = model.texturesReadyEvent.addEventListener(() => {
+        selectedModelTexturesReadyRef.current = true
+        viewer.scene.requestRender()
+      })
       attached = viewer.scene.primitives.add(model)
       selectedModelPrimitiveRef.current = attached
       viewer.scene.requestRender()
@@ -642,9 +643,11 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     return () => {
       disposed = true
       removeRender()
+      removeTexturesReady?.()
       setSelectedModelVisible(viewer, false)
       if (attached && !viewer.isDestroyed()) viewer.scene.primitives.remove(attached)
       selectedModelPrimitiveRef.current = null
+      selectedModelTexturesReadyRef.current = false
     }
   }, [ready, visible, selectedId, selectedModel])
 
@@ -765,7 +768,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       const existing = tilesRef.current.get(tile.url)
       if (existing) {
         existing.show = overlayAllowed && qualityAllows(tile.kind, activeQuality)
-          && (tile.kind !== 'city_volumes' || (cityAllowedAtScale && !selectedModelVisibleRef.current))
+          && (tile.kind !== 'city_volumes' || cityAllowedAtScale)
         if (tile.kind === 'city_volumes' && (cityStageRef.current?.tile !== existing || cityStageRef.current.silhouetteReady))
           existing.maximumScreenSpaceError = citySseForQuality(activeQuality)
       }
@@ -795,7 +798,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
         if (tile.kind === 'roads') tileset.maximumScreenSpaceError = syncRoadLod(viewer)
         tileset.show = visibleRef.current && ((tile.kind !== 'city_volumes' && tile.kind !== 'facade') || !groundGateRef.current || groundGateRef.current.overlayStarted)
           && qualityAllows(tile.kind, qualityRef.current.stage)
-          && (tile.kind !== 'city_volumes' || (cityAtScaleRef.current && !selectedModelVisibleRef.current))
+          && (tile.kind !== 'city_volumes' || cityAtScaleRef.current)
         if (tile.kind === 'ground_buildings') {
           tileset.tileVisible.addEventListener((visibleTile) => {
             if (!visibleRef.current || groundGateRef.current?.groundUrl !== tile.url) return
@@ -958,7 +961,9 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     if (shouldFlyToSelection(focusKey, lastSelectionFocusKeyRef.current, focusOnSelection, skipFlight)) {
       viewer.camera.cancelFlight()
       framedRef.current = true
-      viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat, 30), 100), { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-48), 470), duration: 0.9 })
+      const developerPoint = marker?.point_type === 'developer_building'
+      const mobileDeveloper = developerPoint && window.innerWidth <= 700
+      viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat + (mobileDeveloper ? 0.0005 : 0), 30), 100), { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(developerPoint ? -34 : -48), developerPoint ? 280 : 470), duration: 0.9 })
     }
     if (focusOnSelection || skipFlight) lastSelectionFocusKeyRef.current = focusKey
   }, [selectedId, data, focusOnSelection, selectionRequestId, ready])
@@ -985,7 +990,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     viewer.camera.flyToBoundingSphere(sphere, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-60), 0), duration: 0.9 })
   }
 
-  const stageLabel = selectedModelVisibleRef.current ? 'реконструкция выбранного корпуса · городской 3D временно скрыт'
+  const stageLabel = selectedModelVisibleRef.current ? 'реконструкция выбранного корпуса'
     : deferredCity.length ? 'плоская карта · 3D при приближении'
     : groundPhase && groundPhase !== 'overlay_ready' ? 'плоская подложка'
       : qualityStage === 'flat' && data?.tilesets.some((tile) => tile.kind === 'city_volumes' || tile.kind === 'facade')
@@ -1000,7 +1005,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   return <div className="map-shell" data-testid="map">
     <div className="cesium-host" ref={containerRef} />
     {sceneError && <div className="map-fallback" role="status"><strong>Карта временно недоступна</strong><span>{sceneError}</span></div>}
-    <div className="map-top"><span className="map-live-dot" /><span className="map-top-title">Карта Москвы</span><span className="map-top-muted">· {stageLabel} · {layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span><span className="map-top-mobile">{data?.counts.developer_building_points !== undefined ? `${data.counts.developer_building_points.toLocaleString('ru-RU')} корпусов с точкой` : layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span></div>
+    <div className="map-top"><span className="map-live-dot" /><span className="map-top-title">Карта Москвы</span><span className="map-top-muted">· {stageLabel} · {layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span><span className="map-top-mobile">{data?.counts.developer_building_points !== undefined ? corpusCount(data.counts.developer_building_points) : layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span></div>
     {activeFailures.length > 0 && <div className="map-health-alert" role="status"><strong>Часть карты не загрузилась</strong><span>Ошибка тайлов: {activeFailures.map((failure) => failure.label).join(', ')}. Обновите страницу; если ошибка повторится, проверьте данные карты.</span></div>}
     <div className="map-controls"><button aria-label="Приблизить карту" onClick={() => zoom(1)} disabled={!ready}><Plus size={18} /></button><button aria-label="Отдалить карту" onClick={() => zoom(-1)} disabled={!ready}><Minus size={18} /></button><button aria-label="К центру Москвы" onClick={recenter} disabled={!ready}><LocateFixed size={18} /></button></div>
     {data?.markers && <button className="map-fit-all" type="button" onClick={fitAllPoints} disabled={!ready || data.markers.length === 0}>Показать все новостройки</button>}

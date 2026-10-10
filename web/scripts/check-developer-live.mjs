@@ -4,11 +4,14 @@ import path from 'node:path'
 import { chromium, devices } from '@playwright/test'
 
 // Read-only check of an already running managed preview. It never starts a server.
-const base = new URL(process.argv[2] ?? 'http://127.0.0.1:5173')
-const output = path.resolve(process.argv[3] ?? `../.runtime/browser-developer-live/${new Date().toISOString().replaceAll(':', '-')}`)
+const positional = process.argv.slice(2).filter((arg) => arg !== '--public-ui')
+const base = new URL(positional[0] ?? 'http://127.0.0.1:5173')
+const output = path.resolve(positional[1] ?? `../.runtime/browser-developer-live/${new Date().toISOString().replaceAll(':', '-')}`)
 await mkdir(output, { recursive: true })
 const report = { base_url: base.origin, checked_at: new Date().toISOString(), views: [], api: {}, errors: [] }
 const browser = await chromium.launch({ headless: true })
+const diagnosticsAvailable = base.hostname === '127.0.0.1' && !process.argv.includes('--public-ui')
+report.validation_mode = diagnosticsAvailable ? 'loopback_diagnostics' : 'public_dom_network'
 
 async function json(request, route) {
   const response = await request.get(new URL(route, base).toString())
@@ -30,6 +33,32 @@ async function until(label, task, timeout = 25_000) {
   throw new Error(`Timed out waiting for ${label}${last ? `: ${last.message}` : ''}`)
 }
 
+async function auditNearby(page, health, point) {
+  const nearby = await json(page.request, `/v1/map/nearby?point_id=${encodeURIComponent(point.point_id)}&education=all`)
+  assert.equal(nearby.point_id, point.point_id)
+  assert.equal(nearby.registry_snapshot_id, health.registry_snapshot_id)
+  assert.equal(nearby.map_run_id, health.map_run_id)
+  const metro = nearby.layers.metro?.items ?? []
+  const stationNames = metro.map((item) => item.name.trim().toLocaleLowerCase('ru-RU'))
+  assert.equal(new Set(stationNames).size, stationNames.length, 'same metro station is repeated as separate exits')
+  for (const layer of Object.values(nearby.layers)) for (const item of layer.items ?? []) {
+    const route = item.route
+    if (!route) continue
+    if (route.status === 'routed') {
+      assert.ok(Number.isFinite(route.distance_m) && route.distance_m >= 0
+        && Number.isFinite(route.estimated_minutes) && route.estimated_minutes >= 0
+        && Array.isArray(route.geometry) && route.geometry.length >= 2, 'routed POI lacks its walking path')
+      if (route.origin_access) {
+        assert.equal(route.origin_access.approximate, true)
+        assert.ok(Array.isArray(route.origin_access.geometry) && route.origin_access.geometry.length >= 2)
+        assert.ok(Array.isArray(route.network_geometry) && route.network_geometry.length >= 2)
+      }
+    } else assert.ok(route.distance_m == null && route.estimated_minutes == null, 'unavailable route must not fall back to air distance')
+  }
+  assert.doesNotMatch(await page.locator('.nearby-panel').innerText(), /по прямой/i)
+  return { status: nearby.status, map_run_id: nearby.map_run_id, layer_counts: Object.fromEntries(Object.entries(nearby.layers).map(([key, value]) => [key, value.items?.length ?? 0])) }
+}
+
 async function inspectViewport(name, options, health, firstPage, points) {
   const context = await browser.newContext(options)
   const page = await context.newPage()
@@ -45,7 +74,7 @@ async function inspectViewport(name, options, health, firstPage, points) {
     if (response.status() >= 400) result.asset_http_errors.push(`${response.status()} ${pathname}`)
   })
   try {
-    await page.goto(new URL('/?__map_test=1', base).toString(), { waitUntil: 'domcontentloaded' })
+    await page.goto(new URL(diagnosticsAvailable ? '/?__map_test=1' : '/', base).toString(), { waitUntil: 'domcontentloaded' })
     assert.equal(new URL(page.url()).origin, base.origin, 'browser redirected away from deployed origin')
     await page.locator('.registry-card').first().waitFor({ timeout: 30_000 })
     assert.equal(await page.locator('.offer-card').count(), 0, 'developer mode must not show demo offer cards')
@@ -87,6 +116,59 @@ async function inspectViewport(name, options, health, firstPage, points) {
     result.screenshots.list = path.join(output, `${name}-list.png`)
     await page.screenshot({ path: result.screenshots.list, fullPage: true })
 
+    if (!diagnosticsAvailable) {
+      await card.locator('button').click()
+      await page.getByRole('button', { name: 'Закрыть сведения о точке' }).waitFor({ timeout: 15_000 })
+      assert.ok(await page.locator('.cesium-widget canvas').first().isVisible(), 'public Cesium canvas is not visible')
+      const selectedText = await page.locator('.map-point-card').last().innerText()
+      assert.ok(selectedText.includes(target.address ?? 'Адрес не указан'))
+      assert.ok(selectedText.includes(target.complex_label))
+      assert.ok(selectedText.includes(target.developer_name ?? 'не указан'))
+      assert.match(await page.locator('.map-key').textContent(), /Корпуса с подтверждённой точкой/)
+      assert.doesNotMatch(await page.locator('.map-key').textContent(), /Картографические стройки/)
+      if (name === 'mobile-chromium') {
+        assert.equal(await page.locator('.map-key').isVisible(), false)
+        const top = await page.locator('.map-top').boundingBox()
+        const controls = await page.locator('.map-controls').boundingBox()
+        const selected = await page.locator('.map-point-card').last().boundingBox()
+        const nearby = await page.locator('.nearby-panel').boundingBox()
+        const bottomNote = await page.locator('.map-bottom-note').boundingBox()
+        assert.ok(top && controls && selected && nearby && bottomNote)
+        assert.ok(top.x + top.width < controls.x, 'mobile map status overlaps controls')
+        assert.ok(nearby.y >= selected.y + selected.height + 8, 'nearby panel overlaps selected house card')
+        assert.ok(nearby.y + nearby.height <= bottomNote.y, 'nearby panel covers map attribution')
+        assert.equal(await page.locator('.nearby-expand').getAttribute('aria-expanded'), 'false')
+      }
+      result.nearby = await auditNearby(page, health, point)
+      result.screenshots.list_selection = path.join(output, `${name}-list-selection.png`)
+      await page.screenshot({ path: result.screenshots.list_selection, fullPage: true })
+      if (name === 'mobile-chromium') {
+        await page.locator('.nearby-expand').click()
+        await page.locator('.nearby-results').waitFor()
+        result.screenshots.nearby_expanded = path.join(output, `${name}-nearby-expanded.png`)
+        await page.screenshot({ path: result.screenshots.nearby_expanded, fullPage: true })
+        await page.locator('.nearby-expand').click()
+        await page.getByRole('tab', { name: 'Здания' }).click()
+      }
+      await page.getByRole('textbox', { name: 'Поиск зданий' }).fill(target.complex_label)
+      await page.getByRole('button', { name: 'Найти здания' }).click()
+      const filtered = await json(page.request, `/v1/map/points?query=${encodeURIComponent(target.complex_label)}`)
+      assert.equal(filtered.dataset_id, 'developer_map_points')
+      assert.equal(filtered.map_run_id, health.map_run_id)
+      assert.ok(filtered.items.every((item) => item.point_type === 'developer_building'))
+      assert.equal(await page.getByRole('button', { name: /Фильтры квартир/ }).count(), 1)
+      result.filtered_points = filtered.items.length
+      await page.getByRole('link', { name: 'Данные' }).click()
+      await page.getByRole('tab', { name: 'Дома из каталога квартир' }).waitFor({ timeout: 15_000 })
+      assert.equal(await page.getByRole('tab', { name: 'Демо-предложения' }).count(), 0)
+      assert.equal(await page.getByRole('tab', { name: 'Реестр зданий' }).count(), 0)
+      result.screenshots.data = path.join(output, `${name}-data.png`)
+      await page.screenshot({ path: result.screenshots.data, fullPage: true })
+      assert.deepEqual(result.asset_http_errors, [], 'map or prepared asset returned HTTP error')
+      assert.deepEqual(result.console_errors, [])
+      return
+    }
+
     const mapTest = () => page.evaluate(() => Boolean(window.__novoMapTest?.cameraPose))
     await until('Cesium test hook', mapTest)
     result.camera_before = await page.evaluate(() => window.__novoMapTest.cameraPose())
@@ -111,29 +193,7 @@ async function inspectViewport(name, options, health, firstPage, points) {
     result.screenshots.list_selection = path.join(output, `${name}-list-selection.png`)
     await page.screenshot({ path: result.screenshots.list_selection, fullPage: true })
 
-    const nearby = await json(page.request, `/v1/map/nearby?point_id=${encodeURIComponent(point.point_id)}&education=all`)
-    assert.equal(nearby.point_id, point.point_id)
-    assert.equal(nearby.registry_snapshot_id, health.registry_snapshot_id)
-    assert.equal(nearby.map_run_id, health.map_run_id)
-    const metro = nearby.layers.metro?.items ?? []
-    const stationNames = metro.map((item) => item.name.trim().toLocaleLowerCase('ru-RU'))
-    assert.equal(new Set(stationNames).size, stationNames.length, 'same metro station is repeated as separate exits')
-    for (const layer of Object.values(nearby.layers)) for (const item of layer.items ?? []) {
-      const route = item.route
-      if (!route) continue
-      if (route.status === 'routed') {
-        assert.ok(Number.isFinite(route.distance_m) && route.distance_m >= 0
-          && Number.isFinite(route.estimated_minutes) && route.estimated_minutes >= 0
-          && Array.isArray(route.geometry) && route.geometry.length >= 2, 'routed POI lacks its walking path')
-        if (route.origin_access) {
-          assert.equal(route.origin_access.approximate, true)
-          assert.ok(Array.isArray(route.origin_access.geometry) && route.origin_access.geometry.length >= 2)
-          assert.ok(Array.isArray(route.network_geometry) && route.network_geometry.length >= 2)
-        }
-      } else assert.ok(route.distance_m == null && route.estimated_minutes == null, 'unavailable route must not fall back to air distance')
-    }
-    assert.doesNotMatch(await page.locator('.nearby-panel').innerText(), /по прямой/i)
-    result.nearby = { status: nearby.status, map_run_id: nearby.map_run_id, layer_counts: Object.fromEntries(Object.entries(nearby.layers).map(([key, value]) => [key, value.items?.length ?? 0])) }
+    result.nearby = await auditNearby(page, health, point)
 
     await page.getByRole('button', { name: 'Закрыть сведения о точке' }).click()
     const cameraBeforePoint = await page.evaluate(() => window.__novoMapTest.cameraPose())

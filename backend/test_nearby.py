@@ -137,13 +137,15 @@ class NearbyTests(unittest.TestCase):
         actor = FakeActor({}, lengths={37.5006: 2.0, 37.5007: 1.0})
         index = nearby.NearbyIndex(rows, dataset_id="test", osm_snapshot_at="2026-10-08",
                                    oms_records=oms, actor_factory=lambda _config: actor)
+        index.actor = actor
+        index.graph_valid = True
         medical = index.point(37.5, 55.6, point_id="mappt_test", education="all")["layers"]["medical"]
         self.assertEqual(len(medical["items"]), 2)
         self.assertEqual(medical["items"][-1]["id"], rows[6]["id"])
         self.assertTrue(medical["required_clinic_included"])
         self.assertEqual(medical["items"][-1]["route"]["distance_m"], 1000)
 
-    def test_unrouted_nearby_verified_site_is_not_displaced_by_far_route(self) -> None:
+    def test_verified_oms_prefers_routed_candidate_over_closer_unknown(self) -> None:
         rows = [_row(str(i), "clinic", 37.5001 + i * 0.0001, 55.6)
                 for i in range(7)]
         oms = {rows[i]["osm_source_id"]: {"osm_version": 1,
@@ -156,14 +158,96 @@ class NearbyTests(unittest.TestCase):
                     round(request["locations"][1]["lon"], 4) == 37.5006)
                 return result
 
+        actor = FerryAtCloserVerified({})
         index = nearby.NearbyIndex(rows, dataset_id="test", osm_snapshot_at="2026-10-08",
-                                   oms_records=oms,
-                                   actor_factory=lambda _config: FerryAtCloserVerified({}))
+                                   oms_records=oms, actor_factory=lambda _config: actor)
+        index.actor = actor
+        index.graph_valid = True
         medical = index.point(37.5, 55.6, point_id="mappt_test", education="all")["layers"]["medical"]
-        closer = next(item for item in medical["items"] if item["id"] == rows[5]["id"])
-        self.assertEqual(closer["route"]["status"], "contains_ferry")
-        self.assertIsNone(closer["route"]["estimated_minutes"])
-        self.assertNotIn(rows[6]["id"], [item["id"] for item in medical["items"]])
+        routed_oms = next(item for item in medical["items"] if item["id"] == rows[6]["id"])
+        self.assertEqual(routed_oms["route"]["status"], "routed")
+        self.assertTrue(medical["verified_oms_added_as_exception"])
+        self.assertNotIn(rows[5]["id"], [item["id"] for item in medical["items"]])
+
+    def test_routed_candidates_precede_closer_unknown_and_unknown_fills_only_open_slot(self) -> None:
+        origin = (37.5, 55.6)
+        rows = [_row("air-near", "school", 37.5001, 55.6),
+                _row("walk-next", "school", 37.5002, 55.6),
+                _row("walk-best", "school", 37.5003, 55.6)]
+
+        class NearCandidateUnrouted(FakeActor):
+            def route(self, request: dict) -> dict:
+                result = super().route(request)
+                if round(request["locations"][1]["lon"], 4) == 37.5001:
+                    result["trip"]["legs"][0]["summary"]["has_ferry"] = True
+                return result
+
+        fake = NearCandidateUnrouted({}, lengths={37.5002: 0.8, 37.5003: 0.4})
+        index = nearby.NearbyIndex(rows, dataset_id="test", osm_snapshot_at="2026-10-08",
+                                   actor_factory=lambda _config: fake)
+        index.actor = fake
+        index.graph_valid = True
+        items = index.point(*origin, point_id="mappt_test", education="school")[
+            "layers"]["education"]["items"]
+        self.assertEqual([item["name"] for item in items], ["walk-best", "walk-next"])
+        self.assertTrue(all(item["route"]["status"] == "routed" for item in items))
+
+        one_route_rows = [_row("unknown-near", "school", 37.5001, 55.6),
+                          _row("routed", "school", 37.5002, 55.6),
+                          _row("unknown-far", "school", 37.5003, 55.6)]
+
+        class OneCandidateRouted(FakeActor):
+            def route(self, request: dict) -> dict:
+                result = super().route(request)
+                if round(request["locations"][1]["lon"], 4) != 37.5002:
+                    result["trip"]["legs"][0]["summary"]["has_ferry"] = True
+                return result
+
+        one_actor = OneCandidateRouted({})
+        one_index = nearby.NearbyIndex(
+            one_route_rows, dataset_id="test", osm_snapshot_at="2026-10-08",
+            actor_factory=lambda _config: one_actor)
+        one_index.actor = one_actor
+        one_index.graph_valid = True
+        one_items = one_index.point(*origin, point_id="mappt_test", education="school")[
+            "layers"]["education"]["items"]
+        self.assertEqual(one_items[0]["name"], "routed")
+        self.assertEqual(one_items[0]["route"]["status"], "routed")
+        self.assertEqual(one_items[1]["name"], "unknown-near")
+        self.assertNotEqual(one_items[1]["route"]["status"], "routed")
+
+    def test_routed_oms_upgrades_unrouted_local_oms_slot(self) -> None:
+        origin = (37.5, 55.6)
+        rows = [_row(str(i), "clinic", 37.5001 + i * 0.0001, 55.6)
+                for i in range(10)]
+        oms = {rows[index]["osm_source_id"]: {
+            "osm_version": 1, "official_snapshot_at": "2026-10-10"} for index in (0, 9)}
+
+        class OnlyOneLocalPlusDistantOmsRouted(FakeActor):
+            def route(self, request: dict) -> dict:
+                result = super().route(request)
+                target_lon = round(request["locations"][1]["lon"], 4)
+                if target_lon not in {37.5002, 37.5010}:
+                    result["trip"]["legs"][0]["summary"]["has_ferry"] = True
+                if target_lon == 37.5010:
+                    result["trip"]["legs"][0]["summary"]["length"] = 0.3
+                return result
+
+        actor = OnlyOneLocalPlusDistantOmsRouted({})
+        index = nearby.NearbyIndex(
+            rows, dataset_id="test", osm_snapshot_at="2026-10-08", oms_records=oms,
+            actor_factory=lambda _config: actor)
+        index.actor = actor
+        index.graph_valid = True
+        medical = index.point(*origin, point_id="mappt_test", education="all")[
+            "layers"]["medical"]
+        selected_ids = [item["id"] for item in medical["items"]]
+        self.assertIn(rows[9]["id"], selected_ids)
+        self.assertNotIn(rows[0]["id"], selected_ids)
+        selected_routed_oms = next(item for item in medical["items"]
+                                   if item["id"] == rows[9]["id"])
+        self.assertEqual(selected_routed_oms["route"]["status"], "routed")
+        self.assertTrue(medical["verified_oms_added_as_exception"])
 
     def test_walking_distance_ranks_nearby_candidates_and_minutes_are_integer(self) -> None:
         origin = (37.5, 55.6)
@@ -191,12 +275,16 @@ class NearbyTests(unittest.TestCase):
         fake = ConditionalFerry({})
         index = nearby.NearbyIndex(rows, dataset_id="test", osm_snapshot_at="2026-10-08",
                                    actor_factory=lambda _config: fake)
+        index.actor = fake
+        index.graph_valid = True
         result = index.point(*origin, point_id="mappt_test", education="school")
         items = result["layers"]["education"]["items"]
-        self.assertEqual(items[0]["route"]["status"], "contains_ferry")
-        self.assertIsNone(items[0]["route"]["estimated_minutes"])
-        self.assertIsNone(items[0]["route"]["geometry"])
-        self.assertEqual(items[1]["route"]["status"], "routed")
+        self.assertEqual(items[0]["name"], "other")
+        self.assertEqual(items[0]["route"]["status"], "routed")
+        self.assertEqual(items[1]["name"], "near")
+        self.assertEqual(items[1]["route"]["status"], "contains_ferry")
+        self.assertIsNone(items[1]["route"]["estimated_minutes"])
+        self.assertIsNone(items[1]["route"]["geometry"])
         self.assertEqual(fake.calls, 2)
 
     def test_unlinked_and_snap_failure_never_fabricate_walk_time(self) -> None:
