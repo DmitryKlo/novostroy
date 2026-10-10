@@ -1,0 +1,32 @@
+{
+  "name": "novostroy-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "tsc -b && vite build",
+    "test:unit": "node --test tests/*.unit.mjs",
+    "measure:cache": "node scripts/measure-cache.mjs",
+    "preview": "vite preview --host 0.0.0.0 --port 5173 --strictPort",
+    "test:e2e": "playwright test --project=desktop --project=mobile",
+    "test:webkit": "playwright test --project=webkit-mobile"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "cesium": "^1.134.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.5.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vite-plugin-static-copy": "^3.1.0"
+  }
+}

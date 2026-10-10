@@ -1,0 +1,7 @@
+-r backend/requirements.txt
+-r backend/requirements-postgis.txt
+-r pipeline/requirements.txt
+-r pipeline/collection/requirements.txt
+pytest>=8,<9
+jsonschema>=4.25,<5
+httpx>=0.27,<1

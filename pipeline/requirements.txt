@@ -1,0 +1,2 @@
+pyarrow>=20,<24
+shapely>=2.1,<3

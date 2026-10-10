@@ -1,0 +1,94 @@
+{
+  "request": {
+    "query": "двушка до 15 млн в Пресненском районе",
+    "filters": {
+      "price_basis": "asking_total",
+      "limit": 10,
+      "predicates": [
+        {
+          "key": "unit.floor",
+          "op": "min",
+          "value": 7
+        }
+      ]
+    },
+    "preferences": {
+      "infrastructure_categories": [
+        "school",
+        "pharmacy"
+      ]
+    }
+  },
+  "search_response": {
+    "snapshot_id": "demo-2026-10-09-v1",
+    "data_mode": "demo",
+    "items": [
+      {
+        "offer_id": "demo-offer-001",
+        "unit_id": null,
+        "complex_id": "demo-complex-001",
+        "district_id": "demo-presnensky",
+        "rooms": 2,
+        "area_sqm": 55.2,
+        "floor": 8,
+        "price": {
+          "amount_rub": 14900000,
+          "basis": "asking_total",
+          "observed_at": "2026-10-09T00:00:00Z"
+        },
+        "source": {
+          "quality": "illustrative",
+          "record_mode": "demo",
+          "observed_at": "2026-10-09T00:00:00Z",
+          "rights_status": "demo"
+        },
+        "availability": "unknown",
+        "facts": {
+          "unit.floor": {
+            "value": 8,
+            "unit": "floor",
+            "status": "illustrative",
+            "scope": "unit",
+            "observed_at": "2026-10-09T00:00:00Z"
+          },
+          "offer.price_total_rub": {
+            "value": 14900000,
+            "unit": "RUB",
+            "status": "illustrative",
+            "scope": "offer",
+            "observed_at": "2026-10-09T00:00:00Z"
+          }
+        }
+      }
+    ],
+    "count": 1,
+    "applied_filters": {
+      "budget_max_rub": 15000000,
+      "district_ids": [
+        "demo-presnensky"
+      ],
+      "rooms": [
+        2
+      ],
+      "price_basis": "asking_total",
+      "limit": 10,
+      "predicates": [
+        {
+          "key": "unit.floor",
+          "op": "min",
+          "value": 7
+        }
+      ]
+    },
+    "clarification": null,
+    "coverage": {
+      "status": "illustrative",
+      "observed_categories": [],
+      "required_categories": [
+        "school",
+        "pharmacy"
+      ],
+      "method": null
+    }
+  }
+}

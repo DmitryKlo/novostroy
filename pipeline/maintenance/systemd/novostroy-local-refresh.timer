@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily local Novostroy snapshot validation
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=novostroy-local-refresh.service
+
+[Install]
+WantedBy=timers.target
+

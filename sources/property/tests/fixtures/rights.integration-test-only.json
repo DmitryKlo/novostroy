@@ -1,0 +1,8 @@
+{
+  "source_id": "synthetic_test_feed",
+  "rights_status": "cleared",
+  "access_basis": "isolated_integration_test_only",
+  "permitted_storage": true,
+  "permitted_display": false,
+  "test_only": true
+}

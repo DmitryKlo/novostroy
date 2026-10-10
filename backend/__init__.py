@@ -1,0 +1,1 @@
+"""Novostroy HTTP API."""

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novostroy.local/contracts/developer-matching.schema.json",
+  "title": "Private offline developer-to-map review manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "publication_status", "harvest_manifest_sha256", "targets_sha256", "claims_sha256", "manual_project_links_sha256", "site_adjudication_sources_sha256", "counts", "search", "search_shards", "files"],
+  "properties": {
+    "schema_version": {"const": "developer-map-review/16"},
+    "run_id": {"type": "string", "pattern": "^developer-review-[a-f0-9]{16}$"},
+    "publication_status": {"const": "private_review_only"},
+    "harvest_manifest_sha256": {"$ref": "#/$defs/sha"},
+    "targets_sha256": {"$ref": "#/$defs/sha"},
+    "claims_sha256": {"anyOf": [{"$ref": "#/$defs/sha"}, {"type": "null"}]},
+    "manual_project_links_sha256": {"anyOf": [{"$ref": "#/$defs/sha"}, {"type": "null"}]},
+    "site_adjudication_sources_sha256": {"type": "object", "maxProperties": 3, "additionalProperties": {"$ref": "#/$defs/sha"}},
+    "counts": {"type": "object"},
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address_tasks", "active_address_tasks", "deferred_archived_tasks", "first_batch", "insufficient_input"],
+      "properties": {
+        "address_tasks": {"type": "integer", "minimum": 0},
+        "active_address_tasks": {"type": "integer", "minimum": 0},
+        "deferred_archived_tasks": {"type": "integer", "minimum": 0},
+        "first_batch": {"type": "integer", "minimum": 0},
+        "insufficient_input": {"type": "integer", "minimum": 0}
+      }
+    },
+    "search_shards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_sources", "luna_cache", "luna_clinics", "address_tail_a", "address_tail_b", "luna_coverage"],
+      "properties": {
+        "report_sources": {"type": "integer", "minimum": 0},
+        "luna_cache": {"type": "integer", "minimum": 0},
+        "luna_clinics": {"type": "integer", "minimum": 0},
+        "address_tail_a": {"type": "integer", "minimum": 0},
+        "address_tail_b": {"type": "integer", "minimum": 0},
+        "luna_coverage": {"type": "integer", "minimum": 0}
+      }
+    },
+    "files": {
+      "type": "object",
+      "minProperties": 8,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sha256", "bytes"],
+        "properties": {"sha256": {"$ref": "#/$defs/sha"}, "bytes": {"type": "integer", "minimum": 0}}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "search_task": {
+      "type": "object",
+      "required": ["address_key", "query", "query_basis", "target_ids", "consulted_pages", "max_consulted_pages", "remaining_pages", "status", "rank"],
+      "properties": {
+        "address_key": {"type": "string", "pattern": "^address_[a-f0-9]{24}$"},
+        "query": {"type": "string", "minLength": 1, "maxLength": 600},
+        "query_basis": {"enum": ["typed_address_search_only", "raw_source_address_search_only", "source_name_locality_search_only"]},
+        "target_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "consulted_pages": {"type": "array", "maxItems": 5},
+        "max_consulted_pages": {"const": 5},
+        "remaining_pages": {"type": "integer", "minimum": 0, "maximum": 5},
+        "status": {"enum": ["unsearched", "deferred_archived"]},
+        "rank": {"type": "integer", "minimum": 1},
+        "assigned_research_lane": {"anyOf": [{"enum": ["report_sources", "luna_cache", "luna_clinics", "address_tail_a", "address_tail_b", "luna_coverage"]}, {"type": "null"}]}
+      }
+    }
+  }
+}

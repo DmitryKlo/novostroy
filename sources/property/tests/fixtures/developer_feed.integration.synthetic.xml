@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC INTEGRATION TEST ONLY: fake IDs, fictional location, and fake prices. -->
+<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06">
+  <generation-date>2026-10-09T12:00:00+03:00</generation-date>
+  <offer internal-id="SYNTHETIC-INTEGRATION-FRESH-001">
+    <category>квартира</category>
+    <new-flat>да</new-flat>
+    <newbuilding-id>SYNTHETIC-INTEGRATION-COMPLEX-001</newbuilding-id>
+    <newbuilding-name>СИНТЕТИЧЕСКИЙ ТЕСТ — не объект продажи</newbuilding-name>
+    <unit-id>SYNTHETIC-INTEGRATION-UNIT-001</unit-id>
+    <price><value>12345678</value><currency>RUB</currency></price>
+    <area><value>55</value><unit>кв. м</unit></area>
+    <rooms>2</rooms>
+    <floor>4</floor>
+  </offer>
+  <offer internal-id="SYNTHETIC-INTEGRATION-STALE-002">
+    <category>квартира</category>
+    <new-flat>да</new-flat>
+    <newbuilding-id>SYNTHETIC-INTEGRATION-COMPLEX-001</newbuilding-id>
+    <unit-id>SYNTHETIC-INTEGRATION-UNIT-002</unit-id>
+    <price><value>14500000</value><currency>RUB</currency></price>
+    <area><value>61</value><unit>кв. м</unit></area>
+    <rooms>2</rooms>
+    <floor>6</floor>
+  </offer>
+  <offer internal-id="SYNTHETIC-INTEGRATION-UNKNOWN-PRICE-003">
+    <category>квартира</category>
+    <new-flat>да</new-flat>
+    <newbuilding-id>SYNTHETIC-INTEGRATION-COMPLEX-001</newbuilding-id>
+    <unit-id>SYNTHETIC-INTEGRATION-UNIT-003</unit-id>
+    <area><value>70</value><unit>кв. м</unit></area>
+    <rooms>3</rooms>
+    <floor>8</floor>
+  </offer>
+</realty-feed>

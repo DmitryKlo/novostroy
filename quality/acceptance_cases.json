@@ -1,0 +1,3602 @@
+{
+  "schema_version": "1.0",
+  "contract_reference": "POST /v1/search and /v1/recommendations request fields; no offer IDs are embedded",
+  "case_count": 100,
+  "predicate_scopes": {
+    "response": "evaluate against endpoint response and candidate fixture supplied by runner",
+    "social_data": "evaluate against source adapter or index result"
+  },
+  "cases": [
+    {
+      "case_id": "SC-001",
+      "group": "strict_budget",
+      "name": "min inclusive",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 5000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 5000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-002",
+      "group": "strict_budget",
+      "name": "max inclusive",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-003",
+      "group": "strict_budget",
+      "name": "closed interval",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 5000000,
+          "budget_max_rub": 15000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 5000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "between_inclusive",
+            "value": [
+              5000000,
+              15000000
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-004",
+      "group": "strict_budget",
+      "name": "single-point budget",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 10000000,
+          "budget_max_rub": 10000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 10000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 10000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "between_inclusive",
+            "value": [
+              10000000,
+              10000000
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-005",
+      "group": "strict_budget",
+      "name": "asking total",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000,
+          "price_basis": "asking_total"
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "asking_total"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-006",
+      "group": "strict_budget",
+      "name": "conditional total",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000,
+          "price_basis": "conditional_total"
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "conditional_total"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-007",
+      "group": "strict_budget",
+      "name": "reject wrong price basis",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000,
+          "price_basis": "asking_total"
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "asking_total"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-008",
+      "group": "strict_budget",
+      "name": "missing price excluded",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-009",
+      "group": "strict_budget",
+      "name": "below minimum excluded",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 5000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 5000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-010",
+      "group": "strict_budget",
+      "name": "above maximum excluded",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-011",
+      "group": "strict_budget",
+      "name": "lower equality preserved",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 7000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 7000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-012",
+      "group": "strict_budget",
+      "name": "upper equality preserved",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 12000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 12000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-013",
+      "group": "strict_budget",
+      "name": "both bounds enforced",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 7000000,
+          "budget_max_rub": 12000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 7000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 12000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "between_inclusive",
+            "value": [
+              7000000,
+              12000000
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-014",
+      "group": "strict_budget",
+      "name": "maximum only",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 9000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 9000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-015",
+      "group": "strict_budget",
+      "name": "minimum only",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 11000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 11000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-016",
+      "group": "strict_budget",
+      "name": "recommendation max before ranking",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 10000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 10000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-017",
+      "group": "strict_budget",
+      "name": "natural explicit maximum",
+      "operation": "search",
+      "request": {
+        "query": "до 16 млн",
+        "filters": {
+          "budget_max_rub": 16000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 16000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-018",
+      "group": "strict_budget",
+      "name": "no match stays empty",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 1000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 1000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-019",
+      "group": "strict_budget",
+      "name": "no range relaxation",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 8000000,
+          "budget_max_rub": 9000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 8000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 9000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "between_inclusive",
+            "value": [
+              8000000,
+              9000000
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-020",
+      "group": "strict_budget",
+      "name": "conditional basis retained",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 13000000,
+          "price_basis": "conditional_total"
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 13000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "conditional_total"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-021",
+      "group": "strict_district",
+      "name": "one district",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-022",
+      "group": "strict_district",
+      "name": "two districts use membership",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a",
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a",
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-023",
+      "group": "strict_district",
+      "name": "recommendation exact district",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-024",
+      "group": "strict_district",
+      "name": "missing district excluded",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-025",
+      "group": "strict_district",
+      "name": "unknown district empty",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-unknown"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-unknown"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-026",
+      "group": "strict_district",
+      "name": "duplicate district IDs do not broaden",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a",
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-027",
+      "group": "strict_district",
+      "name": "budget and district intersect",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ],
+          "budget_max_rub": 12000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 12000000
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-028",
+      "group": "strict_district",
+      "name": "no implicit district",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {}
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-029",
+      "group": "strict_district",
+      "name": "district alias ambiguity",
+      "operation": "search",
+      "request": {
+        "query": "В Соколе",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-030",
+      "group": "strict_district",
+      "name": "center ambiguity",
+      "operation": "search",
+      "request": {
+        "query": "В центре Москвы",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-031",
+      "group": "strict_district",
+      "name": "district list is OR membership",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a",
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a",
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-032",
+      "group": "strict_district",
+      "name": "unselected district excluded",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-033",
+      "group": "strict_district",
+      "name": "unresolved boundary stays unknown",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-034",
+      "group": "strict_district",
+      "name": "municipality distinct from district",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-035",
+      "group": "strict_district",
+      "name": "area does not relax district",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-b"
+          ],
+          "area_min_sqm": 50
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 50
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-036",
+      "group": "strict_district",
+      "name": "multiple districts not AND",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a",
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a",
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-037",
+      "group": "strict_district",
+      "name": "null district not wildcard",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-038",
+      "group": "strict_district",
+      "name": "district and rooms intersect",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ],
+          "rooms": [
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              2
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-039",
+      "group": "strict_district",
+      "name": "district filter before limit",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-b"
+          ],
+          "limit": 1
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-040",
+      "group": "strict_district",
+      "name": "no fallback district",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "never_include_item_outside_selected_districts"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-041",
+      "group": "combined_filters",
+      "name": "one room",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "rooms": [
+            1
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              1
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-042",
+      "group": "combined_filters",
+      "name": "two rooms",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "rooms": [
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-043",
+      "group": "combined_filters",
+      "name": "room list means any",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "rooms": [
+            1,
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              1,
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-044",
+      "group": "combined_filters",
+      "name": "minimum area inclusive",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "area_min_sqm": 40
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 40
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-045",
+      "group": "combined_filters",
+      "name": "maximum area inclusive",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "area_max_sqm": 75
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "lte",
+            "value": 75
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-046",
+      "group": "combined_filters",
+      "name": "closed area interval",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "area_min_sqm": 40,
+          "area_max_sqm": 75
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 40
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "lte",
+            "value": 75
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-047",
+      "group": "combined_filters",
+      "name": "missing area excluded",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "area_min_sqm": 40
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 40
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-048",
+      "group": "combined_filters",
+      "name": "missing room count excluded",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "rooms": [
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-049",
+      "group": "combined_filters",
+      "name": "budget district rooms intersection",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 15000000,
+          "district_ids": [
+            "district-test-a"
+          ],
+          "rooms": [
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 15000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-050",
+      "group": "combined_filters",
+      "name": "budget area district intersection",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 18000000,
+          "area_min_sqm": 50,
+          "district_ids": [
+            "district-test-b"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 18000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 50
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-051",
+      "group": "combined_filters",
+      "name": "limit follows filters",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 12000000,
+          "limit": 1
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 12000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-052",
+      "group": "combined_filters",
+      "name": "recommendation all hard filters",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 12000000,
+          "district_ids": [
+            "district-test-a"
+          ],
+          "area_max_sqm": 60
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 12000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "lte",
+            "value": 60
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-053",
+      "group": "combined_filters",
+      "name": "no combined match empty",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 1000000,
+          "district_ids": [
+            "district-test-a"
+          ],
+          "rooms": [
+            3
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 1000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              3
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-054",
+      "group": "combined_filters",
+      "name": "infrastructure cannot override budget",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 9000000
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 9000000
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-055",
+      "group": "combined_filters",
+      "name": "infrastructure cannot override district",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-056",
+      "group": "combined_filters",
+      "name": "asking basis with room area",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "price_basis": "asking_total",
+          "rooms": [
+            2
+          ],
+          "area_min_sqm": 45
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "asking_total"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              2
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 45
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-057",
+      "group": "combined_filters",
+      "name": "conditional basis with district area",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "price_basis": "conditional_total",
+          "district_ids": [
+            "district-test-b"
+          ],
+          "area_max_sqm": 70
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.basis",
+            "op": "eq",
+            "value": "conditional_total"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "lte",
+            "value": 70
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-058",
+      "group": "combined_filters",
+      "name": "no relaxed zero-result filters",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_min_rub": 30000000,
+          "budget_max_rub": 31000000,
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "gte",
+            "value": 30000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 31000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "between_inclusive",
+            "value": [
+              30000000,
+              31000000
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-059",
+      "group": "combined_filters",
+      "name": "rank cannot change eligibility",
+      "operation": "recommendations",
+      "request": {
+        "query": null,
+        "filters": {
+          "budget_max_rub": 10000000,
+          "district_ids": [
+            "district-test-a"
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].price.amount_rub",
+            "op": "lte",
+            "value": 10000000
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-a"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-060",
+      "group": "combined_filters",
+      "name": "area district and rooms intersection",
+      "operation": "search",
+      "request": {
+        "query": null,
+        "filters": {
+          "district_ids": [
+            "district-test-b"
+          ],
+          "area_min_sqm": 35,
+          "area_max_sqm": 65,
+          "rooms": [
+            1,
+            2
+          ]
+        }
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items[*]",
+            "predicate": "every_item_satisfies_all_structured_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_when_no_candidate_satisfies_hard_filters"
+          },
+          {
+            "scope": "response",
+            "path": "items[*].district_id",
+            "op": "in",
+            "value": [
+              "district-test-b"
+            ]
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "gte",
+            "value": 35
+          },
+          {
+            "scope": "response",
+            "path": "items[*].area_sqm",
+            "op": "lte",
+            "value": 65
+          },
+          {
+            "scope": "response",
+            "path": "items[*].rooms",
+            "op": "in",
+            "value": [
+              1,
+              2
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-061",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "В Соколе",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-062",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "В центре Москвы",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-063",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "На севере Москвы",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-064",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "Поближе к центру",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-065",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_infrastructure_categories",
+      "operation": "search",
+      "request": {
+        "query": "Недалеко от метро",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "infrastructure_categories",
+          "code": "query_ambiguous_infrastructure"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "infrastructure_categories"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_infrastructure"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-066",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_infrastructure_categories",
+      "operation": "search",
+      "request": {
+        "query": "С хорошей инфраструктурой",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "infrastructure_categories",
+          "code": "query_ambiguous_infrastructure"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "infrastructure_categories"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_infrastructure"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-067",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_infrastructure_categories",
+      "operation": "search",
+      "request": {
+        "query": "Инфраструктура для ребенка",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "infrastructure_categories",
+          "code": "query_ambiguous_infrastructure"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "infrastructure_categories"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_infrastructure"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-068",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_infrastructure_categories",
+      "operation": "search",
+      "request": {
+        "query": "Ближе к хорошим поликлиникам",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "infrastructure_categories",
+          "code": "query_ambiguous_infrastructure"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "infrastructure_categories"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_infrastructure"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-069",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_budget_max_rub",
+      "operation": "search",
+      "request": {
+        "query": "Дешево",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "budget_max_rub",
+          "code": "query_ambiguous_budget"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "budget_max_rub"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_budget"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-070",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_budget_max_rub",
+      "operation": "search",
+      "request": {
+        "query": "Бюджет около 15",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "budget_max_rub",
+          "code": "query_ambiguous_budget"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "budget_max_rub"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_budget"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-071",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_budget_max_rub",
+      "operation": "search",
+      "request": {
+        "query": "Не дороже среднего",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "budget_max_rub",
+          "code": "query_ambiguous_budget"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "budget_max_rub"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_budget"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-072",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_budget_max_rub",
+      "operation": "search",
+      "request": {
+        "query": "До 15",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "budget_max_rub",
+          "code": "query_ambiguous_budget"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "budget_max_rub"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_budget"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-073",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_price_basis",
+      "operation": "search",
+      "request": {
+        "query": "До 15 миллионов, цена за метр",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "price_basis",
+          "code": "query_ambiguous_price_basis"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "price_basis"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_price_basis"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-074",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_price_basis",
+      "operation": "search",
+      "request": {
+        "query": "До 15 млн с ипотекой",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "price_basis",
+          "code": "query_ambiguous_price_basis"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "price_basis"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_price_basis"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-075",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_area_min_sqm",
+      "operation": "search",
+      "request": {
+        "query": "Большая квартира",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "area_min_sqm",
+          "code": "query_ambiguous_area"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "area_min_sqm"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_area"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-076",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_rooms",
+      "operation": "search",
+      "request": {
+        "query": "Для большой семьи",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "rooms",
+          "code": "query_ambiguous_rooms"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "rooms"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_rooms"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-077",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "Самый престижный район",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_unsupported_preference"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_unsupported_preference"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-078",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "Самый качественный район",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_unsupported_preference"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_unsupported_preference"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-079",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_infrastructure_categories",
+      "operation": "search",
+      "request": {
+        "query": "Близко ко всему",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "infrastructure_categories",
+          "code": "query_ambiguous_infrastructure"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "infrastructure_categories"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_infrastructure"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-080",
+      "group": "query_ambiguity",
+      "name": "ambiguous_query_requires_district_ids",
+      "operation": "search",
+      "request": {
+        "query": "У Сокола в Соколе",
+        "filters": {}
+      },
+      "expected": {
+        "clarification": {
+          "required": true,
+          "field": "district_ids",
+          "code": "query_ambiguous_district"
+        },
+        "expected_invariants": [
+          {
+            "scope": "response",
+            "path": "items",
+            "predicate": "empty_until_required_clarification_is_resolved"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.field",
+            "op": "eq",
+            "value": "district_ids"
+          },
+          {
+            "scope": "response",
+            "path": "clarification.code",
+            "op": "eq",
+            "value": "query_ambiguous_district"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-081",
+      "group": "missing_data",
+      "name": "category source missing",
+      "operation": "social_data",
+      "scenario": {
+        "field": "category_coverage",
+        "condition": "category source missing"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "category_coverage",
+            "predicate": "unknown_not_zero"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-082",
+      "group": "missing_data",
+      "name": "coverage missing",
+      "operation": "social_data",
+      "scenario": {
+        "field": "index.coverage",
+        "condition": "coverage missing"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "index.coverage",
+            "predicate": "missing_is_unknown"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-083",
+      "group": "missing_data",
+      "name": "incomplete coverage",
+      "operation": "social_data",
+      "scenario": {
+        "field": "index.value",
+        "condition": "incomplete coverage"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "index.value",
+            "predicate": "null_below_declared_coverage_threshold"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-084",
+      "group": "missing_data",
+      "name": "complete query finds no POI",
+      "operation": "social_data",
+      "scenario": {
+        "field": "category_count",
+        "condition": "complete query finds no POI"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "category_count",
+            "predicate": "zero_only_if_query_coverage_is_complete"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-085",
+      "group": "missing_data",
+      "name": "clinic tag",
+      "operation": "social_data",
+      "scenario": {
+        "field": "ownership",
+        "condition": "clinic tag"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "ownership",
+            "predicate": "unknown_not_assumed_public_or_private"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-086",
+      "group": "missing_data",
+      "name": "clinic tag quality",
+      "operation": "social_data",
+      "scenario": {
+        "field": "quality",
+        "condition": "clinic tag quality"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "quality",
+            "predicate": "unknown_not_zero_rating"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-087",
+      "group": "missing_data",
+      "name": "school tag quality",
+      "operation": "social_data",
+      "scenario": {
+        "field": "quality",
+        "condition": "school tag quality"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "quality",
+            "predicate": "unknown_not_inferred_from_category"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-088",
+      "group": "missing_data",
+      "name": "node coordinate",
+      "operation": "social_data",
+      "scenario": {
+        "field": "entrance",
+        "condition": "node coordinate"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "entrance",
+            "predicate": "source_point_is_not_assumed_entrance"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-089",
+      "group": "missing_data",
+      "name": "way center fallback",
+      "operation": "social_data",
+      "scenario": {
+        "field": "location.approximate",
+        "condition": "way center fallback"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "location.approximate",
+            "predicate": "true_for_overpass_center"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-090",
+      "group": "missing_data",
+      "name": "entrance absent and route unavailable",
+      "operation": "social_data",
+      "scenario": {
+        "field": "travel_time",
+        "condition": "entrance absent and route unavailable"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "travel_time",
+            "predicate": "unknown_not_zero"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-091",
+      "group": "missing_data",
+      "name": "district assignment unresolved",
+      "operation": "social_data",
+      "scenario": {
+        "field": "district_id",
+        "condition": "district assignment unresolved"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "district_id",
+            "predicate": "unknown_not_wildcard"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-092",
+      "group": "missing_data",
+      "name": "boundary version absent",
+      "operation": "social_data",
+      "scenario": {
+        "field": "district_id",
+        "condition": "boundary version absent"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "district_id",
+            "predicate": "do_not_assign_from_unversioned_geometry"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-093",
+      "group": "missing_data",
+      "name": "municipality vs city district",
+      "operation": "social_data",
+      "scenario": {
+        "field": "district_id",
+        "condition": "municipality vs city district"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "district_id",
+            "predicate": "do_not_conflate_identifier_types"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-094",
+      "group": "missing_data",
+      "name": "stale boundary set",
+      "operation": "social_data",
+      "scenario": {
+        "field": "district_boundary_version",
+        "condition": "stale boundary set"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "district_boundary_version",
+            "predicate": "record_source_version_or_leave_unknown"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-095",
+      "group": "missing_data",
+      "name": "unmapped category tags",
+      "operation": "social_data",
+      "scenario": {
+        "field": "category",
+        "condition": "unmapped category tags"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "category",
+            "predicate": "unclassified_not_guessed"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-096",
+      "group": "missing_data",
+      "name": "conflicting category tags",
+      "operation": "social_data",
+      "scenario": {
+        "field": "category",
+        "condition": "conflicting category tags"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "category",
+            "predicate": "unclassified_not_guessed"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-097",
+      "group": "missing_data",
+      "name": "five-feature bounded sample",
+      "operation": "social_data",
+      "scenario": {
+        "field": "coverage",
+        "condition": "five-feature bounded sample"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "coverage",
+            "predicate": "sample_not_citywide"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-098",
+      "group": "missing_data",
+      "name": "rating absent",
+      "operation": "social_data",
+      "scenario": {
+        "field": "quality",
+        "condition": "rating absent"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "quality",
+            "predicate": "do_not_create_rating"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-099",
+      "group": "missing_data",
+      "name": "model label absent",
+      "operation": "social_data",
+      "scenario": {
+        "field": "ownership",
+        "condition": "model label absent"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "ownership",
+            "predicate": "no_ml_generated_label"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SC-100",
+      "group": "missing_data",
+      "name": "OSM category tag only",
+      "operation": "social_data",
+      "scenario": {
+        "field": "quality",
+        "condition": "OSM category tag only"
+      },
+      "expected": {
+        "clarification": null,
+        "expected_invariants": [
+          {
+            "scope": "social_data",
+            "path": "quality",
+            "predicate": "category_is_not_quality_evidence"
+          }
+        ]
+      }
+    }
+  ]
+}

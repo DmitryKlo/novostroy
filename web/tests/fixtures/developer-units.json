@@ -1,0 +1,141 @@
+{
+  "floors": {
+    "registry_snapshot_id": "developer-map-snapshot-3d1f1f851d73a443",
+    "map_run_id": "developer-map-v1-7092646e252c8681",
+    "unit_run_id": "developer-units-v1-771ab24301ef22f7",
+    "registry_id": "registry-b1feab9d36bced349dfa4b1d",
+    "observed_at": "2026-10-10T16:10:25+00:00",
+    "total_floors": null,
+    "max_observed_unit_floor": 13,
+    "sections": [
+      {
+        "section_id": "section_6a7835901e223c1ab06224aa",
+        "section_label": "1",
+        "floors": [
+          {
+            "floor_id": "floor_2aa8bb31a8767a187c5c7fa0",
+            "floor_number": 13,
+            "unit_count": 1,
+            "geometry_status": "none",
+            "plan": null
+          }
+        ]
+      },
+      {
+        "section_id": "section_c58ea7985d1ec3c7b56a245e",
+        "section_label": "2",
+        "floors": [
+          {
+            "floor_id": "floor_5f91cbfce8613a681e624f8f",
+            "floor_number": 5,
+            "unit_count": 1,
+            "geometry_status": "none",
+            "plan": null
+          },
+          {
+            "floor_id": "floor_69135e3bf8da3cb113c12b0a",
+            "floor_number": 10,
+            "unit_count": 1,
+            "geometry_status": "none",
+            "plan": null
+          }
+        ]
+      }
+    ],
+    "unassigned_unit_count": 0
+  },
+  "units": {
+    "registry_snapshot_id": "developer-map-snapshot-3d1f1f851d73a443",
+    "map_run_id": "developer-map-v1-7092646e252c8681",
+    "unit_run_id": "developer-units-v1-771ab24301ef22f7",
+    "registry_id": "registry-b1feab9d36bced349dfa4b1d",
+    "total": 3,
+    "limit": 48,
+    "offset": 0,
+    "items": [
+      {
+        "unit_id": "unit_3c71166e234e2e9be9a71ac9",
+        "unit_label": "107",
+        "section_id": "section_c58ea7985d1ec3c7b56a245e",
+        "section_label": "2",
+        "floor_id": "floor_5f91cbfce8613a681e624f8f",
+        "floor_number": 5,
+        "rooms_label": "3",
+        "area_m2": 84.3,
+        "price_rub": 51652296,
+        "price_context": "source_displayed_total",
+        "observed_at": "2026-10-10T16:10:23+00:00",
+        "record_updated_at": null,
+        "availability": "unknown",
+        "has_prepared_plan": false
+      },
+      {
+        "unit_id": "unit_93f01218f7470b9a11be3b60",
+        "unit_label": "118",
+        "section_id": "section_c58ea7985d1ec3c7b56a245e",
+        "section_label": "2",
+        "floor_id": "floor_69135e3bf8da3cb113c12b0a",
+        "floor_number": 10,
+        "rooms_label": "3",
+        "area_m2": 84.3,
+        "price_rub": 51483696,
+        "price_context": "source_displayed_total",
+        "observed_at": "2026-10-10T16:10:23+00:00",
+        "record_updated_at": null,
+        "availability": "unknown",
+        "has_prepared_plan": false
+      },
+      {
+        "unit_id": "unit_14356a9b93393138077b6e2f",
+        "unit_label": "73",
+        "section_id": "section_6a7835901e223c1ab06224aa",
+        "section_label": "1",
+        "floor_id": "floor_2aa8bb31a8767a187c5c7fa0",
+        "floor_number": 13,
+        "rooms_label": "3",
+        "area_m2": 72.8,
+        "price_rub": 57086848,
+        "price_context": "source_displayed_total",
+        "observed_at": "2026-10-10T16:10:25+00:00",
+        "record_updated_at": null,
+        "availability": "unknown",
+        "has_prepared_plan": false
+      }
+    ]
+  },
+  "unit_detail": {
+    "registry_snapshot_id": "developer-map-snapshot-3d1f1f851d73a443",
+    "map_run_id": "developer-map-v1-7092646e252c8681",
+    "unit_run_id": "developer-units-v1-771ab24301ef22f7",
+    "registry_id": "registry-b1feab9d36bced349dfa4b1d",
+    "unit_id": "unit_3c71166e234e2e9be9a71ac9",
+    "unit_label": "107",
+    "section_id": "section_c58ea7985d1ec3c7b56a245e",
+    "section_label": "2",
+    "floor_id": "floor_5f91cbfce8613a681e624f8f",
+    "floor_number": 5,
+    "rooms_label": "3",
+    "area_m2": 84.3,
+    "price_rub": 51652296,
+    "price_context": "source_displayed_total",
+    "observed_at": "2026-10-10T16:10:23+00:00",
+    "record_updated_at": null,
+    "availability": "unknown",
+    "has_prepared_plan": false,
+    "plans": []
+  },
+  "floor_detail": {
+    "registry_snapshot_id": "developer-map-snapshot-3d1f1f851d73a443",
+    "map_run_id": "developer-map-v1-7092646e252c8681",
+    "unit_run_id": "developer-units-v1-771ab24301ef22f7",
+    "registry_id": "registry-b1feab9d36bced349dfa4b1d",
+    "floor_id": "floor_2aa8bb31a8767a187c5c7fa0",
+    "section_id": "section_6a7835901e223c1ab06224aa",
+    "section_label": "1",
+    "floor_number": 13,
+    "unit_count": 1,
+    "geometry_status": "none",
+    "plan": null,
+    "hotspots": []
+  }
+}

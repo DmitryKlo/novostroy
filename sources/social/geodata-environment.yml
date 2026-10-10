@@ -1,0 +1,9 @@
+name: novostroy-geodata
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13.16
+  - osmium-tool=1.19.1
+  - pyosmium=4.3.1
+  - shapely=2.2.0
+  - pyarrow=25.0.0

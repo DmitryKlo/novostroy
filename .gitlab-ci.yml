@@ -1,0 +1,122 @@
+# GitLab receives source only. Real data/assets travel as separately checked releases.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "branch1"'
+    - if: '$CI_COMMIT_BRANCH == "branch1"'
+    - when: never
+
+stages:
+  - verify
+  - test
+  - build
+  - deploy
+
+variables:
+  GIT_CLEAN_FLAGS: -ffdx
+
+source_boundary:
+  stage: verify
+  image: python:3.12-slim
+  timeout: 5m
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null
+  script:
+    - python -m scripts.ci_source_guard
+
+test_python:
+  stage: test
+  image: python:3.12-slim
+  needs: [source_boundary]
+  timeout: 20m
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git zstd >/dev/null
+    - python -m pip install --no-cache-dir -r requirements-dev.txt
+  script:
+    - python -m scripts.ci_python_tests
+
+test_web:
+  stage: test
+  image: node:22-alpine
+  needs: [source_boundary]
+  timeout: 20m
+  script:
+    - cd web
+    - npm ci --no-audit --no-fund
+    - npm run test:unit
+    - npm run build
+
+.kaniko_build:
+  stage: build
+  timeout: 30m
+  environment:
+    name: registry-build
+    action: prepare
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  needs: [source_boundary, test_python, test_web]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "branch1" && $CI_COMMIT_REF_PROTECTED == "true"'
+  before_script:
+    - |
+      set +x
+      set -eu
+      test -r "${SPIRIT_DOCKER_SA_KEY:?Configure a protected File variable SPIRIT_DOCKER_SA_KEY}"
+      test "$(/busybox/uname -m)" = "x86_64"
+      ci_private_dir="$CI_PROJECT_DIR/.runtime/spirit-ci"
+      export DP_WORKDIR="$ci_private_dir/dp-state"
+      export DP_CONFIG_PATH="$DP_WORKDIR/config.yaml"
+      export DP_LOG_FILE=/dev/null
+      export DP_DEBUG_LOG_FILE=/dev/null
+      /busybox/mkdir -p "$DP_WORKDIR" /kaniko/.docker
+      /busybox/chmod 700 "$ci_private_dir" "$DP_WORKDIR" /kaniko/.docker
+      trap '/busybox/rm -rf "$ci_private_dir" /kaniko/.docker/config.json' EXIT
+      /busybox/wget -q -O "$ci_private_dir/dp" https://spirit.culab.ru/cli/cu/14.1.0/linux/dp
+      printf '%s  %s\n' 'c5d4f3e31d3f927bf74d1283d7fabd166c52aca82255b69588ec7c83f4b60fc0' "$ci_private_dir/dp" | /busybox/sha256sum -c -
+      /busybox/chmod 700 "$ci_private_dir/dp"
+      if ! "$ci_private_dir/dp" config init --path "$DP_CONFIG_PATH" --target cu >/dev/null 2>&1; then
+        printf 'Spirit CLI configuration failed\n' >&2
+        exit 1
+      fi
+      if ! "$ci_private_dir/dp" auth service-acc --key-file "$SPIRIT_DOCKER_SA_KEY" >/dev/null 2>&1; then
+        printf 'Spirit service-account authentication failed\n' >&2
+        exit 1
+      fi
+      if ! "$ci_private_dir/dp" auth configure-kaniko --config-path /kaniko/.docker/config.json >/dev/null 2>&1; then
+        printf 'Spirit Kaniko credential configuration failed\n' >&2
+        exit 1
+      fi
+      test -s /kaniko/.docker/config.json
+
+build_api:
+  extends: .kaniko_build
+  script:
+    - >-
+      /kaniko/executor
+      --context "dir://$CI_PROJECT_DIR"
+      --dockerfile "$CI_PROJECT_DIR/deploy/api.Dockerfile"
+      --destination "registry.spirit.culab.ru/hack-l2sh-2/novostroy-api:$CI_COMMIT_SHA"
+
+build_web:
+  extends: .kaniko_build
+  script:
+    - >-
+      /kaniko/executor
+      --context "dir://$CI_PROJECT_DIR"
+      --dockerfile "$CI_PROJECT_DIR/deploy/web.Dockerfile"
+      --destination "registry.spirit.culab.ru/hack-l2sh-2/novostroy-web:$CI_COMMIT_SHA"
+
+deploy_existing_vm:
+  stage: deploy
+  tags: [novostroy-trusted-deploy]
+  needs: [build_api, build_web]
+  resource_group: novostroy-production
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "branch1" && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: false
+  timeout: 30m
+  script:
+    - python3 -m scripts.ci_deploy

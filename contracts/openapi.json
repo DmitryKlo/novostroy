@@ -1,0 +1,2154 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Novostroy API",
+    "version": "1.4.0",
+    "description": "Additive criteria/facts, model-candidate review, combined point-map, and local amenity-route contracts. Provider identities are server-hidden by default; required map copyright attribution remains visible. Demo offers and prices are illustrative."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Snapshot and data-mode status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "api_version",
+                    "snapshot_id",
+                    "snapshot_at",
+                    "data_mode",
+                    "status",
+                    "counts",
+                    "registry_enabled",
+                    "registry_snapshot_id",
+                    "catalog_view"
+                  ],
+                  "properties": {
+                    "api_version": {
+                      "const": "1"
+                    },
+                    "snapshot_id": {
+                      "type": "string"
+                    },
+                    "snapshot_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "data_mode": {
+                      "enum": [
+                        "demo",
+                        "real"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "demo, ready, no_licensed_feed, or another explicit runtime state"
+                    },
+                    "counts": {
+                      "$ref": "./schemas.json#/$defs/Counts"
+                    },
+                    "registry_enabled": {
+                      "type": "boolean"
+                    },
+                    "registry_snapshot_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "catalog_view": {
+                      "enum": [
+                        "building_registry",
+                        "developer_buildings",
+                        "demo",
+                        "real"
+                      ]
+                    },
+                    "map_run_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/districts": {
+      "get": {
+        "operationId": "listDistricts",
+        "responses": {
+          "200": {
+            "description": "Versioned districts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "snapshot_id",
+                    "data_mode",
+                    "items",
+                    "count"
+                  ],
+                  "properties": {
+                    "snapshot_id": {
+                      "type": "string"
+                    },
+                    "data_mode": {
+                      "enum": [
+                        "demo",
+                        "real"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "./schemas.json#/$defs/District"
+                      }
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/map": {
+      "get": {
+        "operationId": "getMap",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budget_min_rub",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "budget_max_rub",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "district_ids",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "complex_ids",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          {
+            "name": "area_min_sqm",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "area_max_sqm",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "price_basis",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asking_total",
+                "conditional_total"
+              ]
+            }
+          },
+          {
+            "name": "predicates",
+            "in": "query",
+            "description": "One URL-encoded JSON array of typed predicates; same strict semantics as POST search.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Map snapshot with independent source-backed ground footprints, city volumes, and cartographic 3D Tiles routes when their public assets are available. Ground reuses the city building population and adds no building count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "snapshot_id",
+                    "data_mode",
+                    "center",
+                    "tilesets",
+                    "complexes",
+                    "counts",
+                    "applied_filters"
+                  ],
+                  "properties": {
+                    "snapshot_id": {
+                      "type": "string"
+                    },
+                    "data_mode": {
+                      "enum": [
+                        "demo",
+                        "real"
+                      ]
+                    },
+                    "center": {
+                      "$ref": "./schemas.json#/$defs/LonLat"
+                    },
+                    "tilesets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "./schemas.json#/$defs/Tileset"
+                      }
+                    },
+                    "complexes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "./schemas.json#/$defs/MapComplex"
+                      }
+                    },
+                    "counts": {
+                      "$ref": "./schemas.json#/$defs/Counts"
+                    },
+                    "applied_filters": {
+                      "$ref": "./schemas.json#/$defs/Filters"
+                    },
+                    "clarification": {
+                      "anyOf": [
+                        {
+                          "$ref": "./schemas.json#/$defs/Clarification"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/complexes/{complex_id}": {
+      "get": {
+        "operationId": "getComplex",
+        "parameters": [
+          {
+            "name": "complex_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One complex",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/Complex"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/offers/{offer_id}": {
+      "get": {
+        "operationId": "getOffer",
+        "parameters": [
+          {
+            "name": "offer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One dated asking offer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/Offer"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/search": {
+      "post": {
+        "operationId": "searchOffers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas.json#/$defs/QueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Strict hard-filter search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/SearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidRequest"
+          }
+        }
+      }
+    },
+    "/v1/recommendations": {
+      "post": {
+        "operationId": "recommendOffers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas.json#/$defs/QueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Strict matching followed by evidence-aware ranking. Each returned item has recommendation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/SearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidRequest"
+          }
+        }
+      }
+    },
+    "/v1/compare": {
+      "post": {
+        "operationId": "compareOffers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "offer_ids"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "offer_ids": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 4,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Offers in requested order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "snapshot_id",
+                    "data_mode",
+                    "items",
+                    "fields"
+                  ],
+                  "properties": {
+                    "snapshot_id": {
+                      "type": "string"
+                    },
+                    "data_mode": {
+                      "enum": [
+                        "demo",
+                        "real"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "./schemas.json#/$defs/Offer"
+                      }
+                    },
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidRequest"
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "operationId": "recordEvent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event_type"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "map_view",
+                      "offer_view",
+                      "search",
+                      "recommendation_view",
+                      "compare"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 80,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted without personal data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accepted"
+                  ],
+                  "properties": {
+                    "accepted": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidRequest"
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "description": "Local UI event counts and observed search-to-result timings. Never interpret as a sale conversion metric.",
+        "responses": {
+          "200": {
+            "description": "Rolling-window aggregate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "window_days",
+                    "event_counts",
+                    "session_linked_searches",
+                    "time_to_result",
+                    "minimum_latency_samples",
+                    "interpretation"
+                  ],
+                  "properties": {
+                    "window_days": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "event_counts": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "session_linked_searches": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "time_to_result": {
+                      "type": "object",
+                      "required": [
+                        "search_to_offer_view",
+                        "search_to_compare"
+                      ],
+                      "properties": {
+                        "search_to_offer_view": {
+                          "$ref": "./schemas.json#/$defs/TimingMetric"
+                        },
+                        "search_to_compare": {
+                          "$ref": "./schemas.json#/$defs/TimingMetric"
+                        }
+                      }
+                    },
+                    "minimum_latency_samples": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "interpretation": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assets/{asset_path}": {
+      "get": {
+        "operationId": "getTileAsset",
+        "description": "Sanitized versioned 3D Tiles root or scoped region tileset JSON and referenced GLB content. Public immutable caching, ETag, Last-Modified and byte ranges apply; manifests and source indexes remain private.",
+        "parameters": [
+          {
+            "name": "asset_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tile asset bytes"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/criteria": {
+      "get": {
+        "operationId": "getCriteria",
+        "description": "Returns a public, provider-redacted criterion registry for the current snapshot.",
+        "responses": {
+          "200": {
+            "description": "Typed searchable criteria",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/CriteriaResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry/buildings": {
+      "get": {
+        "operationId": "listRegistryBuildings",
+        "description": "Before developer-map publication, returns the historical registry under its visibility policy. After publication, returns publisher-building identities with observed apartment counts, no current offer/price claim, and null coordinates where no building-specific location is verified. In developer mode only query and pagination are available; older status, floor, district and walking filters return 422.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "multifamily",
+                "apartment_complex",
+                "low_rise"
+              ]
+            }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "description": "Exact mapped-boundary name for uniquely covered verified registry points; no legal-district claim."
+          },
+          {
+            "name": "handover_year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 2100
+            },
+            "description": "Reported handover year."
+          },
+          {
+            "name": "handover_quarter",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            },
+            "description": "Reported handover quarter."
+          },
+          {
+            "name": "floors_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            },
+            "description": "Inclusive lower bound; unknown, textual, and ranged floors do not match."
+          },
+          {
+            "name": "floors_max",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            },
+            "description": "Inclusive upper bound; floors_min greater than floors_max returns 422."
+          },
+          {
+            "name": "walk_metro_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Maximum rounded-up routed pedestrian minutes to a metro station; unknown route does not match."
+          },
+          {
+            "name": "walk_school_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Maximum rounded-up routed pedestrian minutes to a school; unknown route does not match."
+          },
+          {
+            "name": "walk_kindergarten_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Maximum rounded-up routed pedestrian minutes to a kindergarten; unknown route does not match."
+          },
+          {
+            "name": "walk_medical_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Maximum rounded-up routed pedestrian minutes to a clinic; unknown route does not match."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 48
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered building records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "./schemas.json#/$defs/RegistryListResult"
+                    },
+                    {
+                      "$ref": "./schemas.json#/$defs/DeveloperRegistryListResult"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry/buildings/{registry_id}": {
+      "get": {
+        "operationId": "getRegistryBuilding",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One building record in the active catalogue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "./schemas.json#/$defs/RegistryBuilding"
+                    },
+                    {
+                      "$ref": "./schemas.json#/$defs/DeveloperBuilding"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry/map": {
+      "get": {
+        "operationId": "mapRegistryBuildings",
+        "description": "Uses the same active snapshot and query as the building list. In developer mode only source-backed building-specific coordinates become markers; unlocated buildings stay in the list. Historical filters return 422 in developer mode.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "multifamily",
+                "apartment_complex",
+                "low_rise"
+              ]
+            }
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "handover_year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 2100
+            }
+          },
+          {
+            "name": "handover_quarter",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            }
+          },
+          {
+            "name": "floors_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "floors_max",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            }
+          },
+          {
+            "name": "walk_metro_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "walk_school_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "walk_kindergarten_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "walk_medical_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified registry markers and map layers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "./schemas.json#/$defs/RegistryMapResult"
+                    },
+                    {
+                      "$ref": "./schemas.json#/$defs/DeveloperRegistryMapResult"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/map/points": {
+      "get": {
+        "operationId": "mapSourcePoints",
+        "description": "Before developer-map publication, returns the historical registry and separate OSM candidates. After publication, returns only eligible publisher-building points from the same snapshot as the list and registry map. A project marker is never copied to a building. Explicit publisher project IDs support group evidence; name and proximity do not. Historical filters return 422 in developer mode.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "description": "Searches names in both point groups."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Registry-only filter; mapped construction records are excluded and counted because their status is unknown."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "multifamily",
+                "apartment_complex",
+                "low_rise"
+              ]
+            },
+            "description": "Registry-only filter; mapped construction records are excluded and counted because their kind is unknown."
+          },
+          {
+            "name": "district",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "description": "Registry-only exact mapped boundary; unknown or nonunique cover does not match."
+          },
+          {
+            "name": "handover_year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 2100
+            },
+            "description": "Registry-only reported historical year; mapped points are excluded and counted."
+          },
+          {
+            "name": "handover_quarter",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            },
+            "description": "Registry-only reported historical quarter; mapped points are excluded and counted."
+          },
+          {
+            "name": "floors_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            },
+            "description": "Registry-only inclusive exact numeric-floor lower bound; mapped points are excluded and counted."
+          },
+          {
+            "name": "floors_max",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300
+            },
+            "description": "Registry-only inclusive exact numeric-floor upper bound; mapped points are excluded and counted."
+          },
+          {
+            "name": "walk_metro_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Registry-only positive routed pedestrian minutes to metro; unknown does not match."
+          },
+          {
+            "name": "walk_school_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Registry-only positive routed pedestrian minutes to school; unknown does not match."
+          },
+          {
+            "name": "walk_kindergarten_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Registry-only positive routed pedestrian minutes to kindergarten; unknown does not match."
+          },
+          {
+            "name": "walk_medical_max_min",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 180
+            },
+            "description": "Registry-only positive routed pedestrian minutes to clinic; unknown does not match."
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 300
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            },
+            "description": "Developer mode only: historical source-observed apartment fact; all apartment filters must match one unit."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered point records and explicit coverage counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "./schemas.json#/$defs/MapPointsResult"
+                    },
+                    {
+                      "$ref": "./schemas.json#/$defs/DeveloperMapPointsResult"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid filter"
+          },
+          "503": {
+            "description": "Required validated registry or model run is unavailable"
+          }
+        }
+      }
+    },
+    "/v1/map/nearby": {
+      "get": {
+        "operationId": "nearbyForMapPoint",
+        "description": "Selects at most two metro stations, two schools plus two kindergartens, and two clinics for one confirmed opaque map point. A bounded candidate pool is ranked by actual pedestrian-route length when routed; an unrouted nearby candidate remains explicitly unknown. One verified OMS clinic may replace the second local clinic and may be far away; selection_policy makes that exception explicit. Walking minutes are rounded up, ferries are excluded, and endpoints have a 50 m snap gate. Unknown entrances, live closures, service eligibility, and citywide POI completeness are not claimed. Responses are private, revalidated with weak ETag, and contain no raw source identities.",
+        "parameters": [
+          {
+            "name": "point_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^mappt_[a-f0-9]{24}$"
+            }
+          },
+          {
+            "name": "education",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "all",
+                "school",
+                "kindergarten"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded POI selection and individually gated walking routes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/NearbyPointResult"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Private weak validator matched; no response body"
+          },
+          "404": {
+            "description": "Point ID is not in the current eligible map snapshot"
+          },
+          "422": {
+            "description": "Invalid point ID or education filter"
+          },
+          "503": {
+            "description": "Validated snapshots or local routing worker unavailable"
+          }
+        }
+      }
+    },
+    "/v1/map/nearby/viewport": {
+      "get": {
+        "operationId": "nearbyInMapViewport",
+        "description": "Returns at most 150 source-mapped POI markers for a bounded viewport. It does not calculate walking routes; layers are opt-in and hidden by default in the client. Polygon representative points are approximate locations, not verified entrances. Responses are private with weak ETag revalidation.",
+        "parameters": [
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "west,south,east,north; increasing coordinates and at most 0.15 degrees on each axis"
+          },
+          {
+            "name": "layers",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "metro,education,medical",
+              "maxLength": 64
+            },
+            "description": "Distinct comma-separated metro, education, medical layer keys"
+          },
+          {
+            "name": "education",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "all",
+                "school",
+                "kindergarten"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 150,
+              "default": 150
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capped source-mapped viewport markers without routes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/NearbyViewportResult"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Private weak validator matched; no response body"
+          },
+          "422": {
+            "description": "Invalid bounds, layers, education filter, or limit"
+          },
+          "503": {
+            "description": "Validated snapshots or local POI worker unavailable"
+          }
+        }
+      }
+    },
+    "/v1/models/candidates/summary": {
+      "get": {
+        "operationId": "getModelCandidateSummary",
+        "description": "Coverage of one validated offline model-assessment run across every input source record. A source candidate is not necessarily a unique Moscow building or a confirmed project link. No validated run returns 503, never zero coverage.",
+        "responses": {
+          "200": {
+            "description": "Assessment coverage and facets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/ModelCandidateSummary"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelRunUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/models/candidates": {
+      "get": {
+        "operationId": "listModelCandidates",
+        "description": "Paginated evaluations of all source records, including unlinked OSM construction outlines and rejected non-Moscow or non-building events. A ready mapped outline is not an approved project or facade. No geometry URL or GLB appears in the list.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ready",
+                "review",
+                "rejected",
+                "unavailable"
+              ]
+            }
+          },
+          {
+            "name": "reason_code",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "source_group",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "registry",
+                "mapped_construction",
+                "external_event"
+              ]
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^registry-[a-f0-9]{24}$"
+            },
+            "description": "Exact confirmed registry identity filter; unlinked mapped construction remains available in the unfiltered list."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 48
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered candidate evaluations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/ModelCandidateListResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelRunUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/models/candidates/{candidate_id}": {
+      "get": {
+        "operationId": "getModelCandidate",
+        "description": "One evaluation with bounded public evidence. The registry link is nullable and never inferred from spatial proximity alone.",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^cand_[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selected candidate evaluation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/ModelCandidateDetailResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelRunUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/models/candidates/{candidate_id}/geometry": {
+      "get": {
+        "operationId": "getModelCandidateGeometry",
+        "description": "On-demand sanitized immutable asset reference and bounded footprint for a ready candidate only. An unlinked mapped-construction outline remains independent of the legal building registry. Non-ready candidates return 404.",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^cand_[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selected renderable geometry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/ModelCandidateGeometryResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelRunUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/data-coverage": {
+      "get": {
+        "operationId": "getDataCoverage",
+        "description": "Provider-hidden dataset coverage; demo, real-current, geospatial and historical building registry counts remain separate. No QA or user conversion metrics.",
+        "responses": {
+          "200": {
+            "description": "Current dataset and field coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DataCoverageResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/floors": {
+      "get": {
+        "operationId": "getDeveloperBuildingFloors",
+        "description": "Observed section and floor groupings for exact units of one current publisher building. Floor count is nullable; observed floors are only a lower bound.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Known floors and unassigned-unit count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperFloorsResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/floors/{floor_id}": {
+      "get": {
+        "operationId": "getDeveloperBuildingFloor",
+        "description": "One exact observed floor. Hotspots remain empty until source-linked floor geometry is validated.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "floor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Floor and optional prepared plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperFloorDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/units": {
+      "get": {
+        "operationId": "listDeveloperBuildingUnits",
+        "description": "Paginated source-observed unit IDs of this exact building. Apartment constraints apply to one unit before total and pagination. Prices are historical displayed source amounts, not current inventory.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "section_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "floor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "floor_known",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "price_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000000}
+          },
+          {
+            "name": "price_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000000}
+          },
+          {
+            "name": "price_per_m2_min_rub",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+          },
+          {
+            "name": "price_per_m2_max_rub",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+          },
+          {
+            "name": "rooms",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 20}
+          },
+          {
+            "name": "area_min_m2",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000}
+          },
+          {
+            "name": "area_max_m2",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "number", "exclusiveMinimum": 0, "maximum": 10000}
+          },
+          {
+            "name": "unit_floor_min",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": -10, "maximum": 300}
+          },
+          {
+            "name": "unit_floor_max",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": -10, "maximum": 300}
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 48
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated observed apartments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperUnitsResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/units/{unit_id}": {
+      "get": {
+        "operationId": "getDeveloperBuildingUnit",
+        "description": "One exact source unit with observed facts and only prepared local plan assets.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed unit detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperUnitDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-buildings/{registry_id}/model": {
+      "get": {
+        "operationId": "getDeveloperSelectedModel",
+        "description": "One selected schematic building reconstruction bound to the active developer map. The height is a source floor-count estimate, not surveyed geometry.",
+        "parameters": [
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ready or unavailable selected reconstruction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas.json#/$defs/DeveloperSelectedModel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-model-assets/{sha256}": {
+      "get": {
+        "operationId": "getDeveloperModelAsset",
+        "description": "Hash-addressed selected GLB from the active model run; no source URL proxy.",
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prepared GLB reconstruction",
+            "content": {
+              "model/gltf-binary": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/developer-unit-assets/{sha256}": {
+      "get": {
+        "operationId": "getDeveloperUnitAsset",
+        "description": "Hash-addressed prepared local raster plan, only when listed by the active unit menu. Source URLs are never proxied.",
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prepared raster plan",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "NotFound": {
+        "description": "Missing record",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "InvalidRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ModelRunUnavailable": {
+        "description": "No complete validated model-candidate assessment run is active",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+# Optional parser for the reviewed public Minstroy XLS registry jobs.
+xlrd>=2.0,<3

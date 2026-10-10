@@ -1,0 +1,1025 @@
+{
+  "schema_version": "social-criteria-2026-10-09-v1",
+  "language": "ru",
+  "default_value_policy": "unknown is null; missing source rows never imply absence; do not coerce unknown to zero",
+  "measurement_policy": {
+    "walking_time": "duration from an explicit pedestrian router only, from residential public entrance to destination public access point; units seconds",
+    "straight_line": "Haversine geometry only; stored in separate *_straight_line_m fields and never converted to time",
+    "approximate_access": "route may use a mapped center only when explicitly enabled; preserve origin_access_kind, target_access_kind and approximate=true",
+    "direct_transit": "must be returned by a transit router as a direct bus/tram itinerary with zero transfers and an explicit bus or tram leg; nearby stops alone are not evidence",
+    "index": "null until every required POI category and pedestrian route is complete for the declared geographic scope and a pinned source version"
+  },
+  "fact_contract": {
+    "path": "facts[key]",
+    "required_fields": [
+      "value",
+      "unit",
+      "status",
+      "scope",
+      "observed_at",
+      "provenance"
+    ],
+    "status_enum": [
+      "observed",
+      "derived",
+      "estimated",
+      "illustrative",
+      "unknown",
+      "stale",
+      "conflict",
+      "not_applicable"
+    ],
+    "null_statuses": [
+      "unknown",
+      "stale",
+      "conflict"
+    ],
+    "provenance_fields": [
+      "source_id",
+      "source_record_id",
+      "source_field",
+      "source_updated_at",
+      "rights_status",
+      "method",
+      "source_version",
+      "coverage_status",
+      "origin_access_kind",
+      "target_access_kind",
+      "approximate"
+    ]
+  },
+  "sources": {
+    "osm": {
+      "name": "OpenStreetMap",
+      "kind": "community_map_data",
+      "url": "https://www.openstreetmap.org/copyright",
+      "license": "ODbL 1.0",
+      "rights_gate": "retain attribution and comply with ODbL when distributing the database or derived database",
+      "current_sample": {
+        "path": "data/social/osm_overpass_poi_normalized.json",
+        "manifest": "data/social/poi_manifest.json",
+        "features": 50,
+        "coverage": "sample",
+        "coverage_completeness": "unknown",
+        "retrieved_at": "2026-10-09T09:21:12Z",
+        "normalized_sha256": "e3d4f0dcea718b820a23cb1f9644297bb989f2ed05ec1aa084db6092f3e7ff0e",
+        "note": "Observed category counts are not completeness evidence; current sample query did not request transit or emergency facilities."
+      },
+      "refresh": "use a pinned owned regional extract or a bounded verified request; record extract timestamp, OSM versions, query/bounds and hash; never infer completeness from a sample",
+      "candidate_extracts_reviewed": [
+        {
+          "name": "BBBike Moscow preset",
+          "url": "https://download.bbbike.org/osm/bbbike/Moscow/Moscow.osm.pbf",
+          "size_bytes_head": 84991507,
+          "last_modified": "2026-10-03T16:28:51Z",
+          "polygon_url": "https://download.bbbike.org/osm/bbbike/Moscow/Moscow.poly",
+          "published_bbox_wgs84": [
+            37.32,
+            55.57,
+            37.88,
+            55.92
+          ],
+          "boundary_comparison": "not full city; relation 102269 bbox is [36.8031012,55.1421745,37.9674277,56.0212238]",
+          "downloaded": false,
+          "use_decision": "reject as citywide source; bbox excludes outer Moscow"
+        },
+        {
+          "name": "Geofabrik Central Federal District latest",
+          "url": "https://download.geofabrik.de/russia/central-fed-district-latest.osm.pbf",
+          "resolved_url": "https://download.geofabrik.de/russia/central-fed-district-261008.osm.pbf",
+          "size_bytes_head": 880118821,
+          "last_modified": "2026-10-08T22:25:33Z",
+          "downloaded": true,
+          "downloaded_bytes": 880118821,
+          "sha256": "73e08b34988ec5780b5fd2d94a748b41f019a9d19ebbd385bede4e3ba7bb0d16",
+          "use_decision": "one bounded download approved; regional PBF clipped locally to relation 102269; source remains broader than Moscow"
+        }
+      ],
+      "citywide_snapshot": {
+        "city_extract": "data/social/osm_moscow_city_261008.osm.pbf",
+        "manifest": "data/social/osm_moscow_city_261008.manifest.json",
+        "replication_timestamp": "2026-10-08T20:21:06Z",
+        "boundary_relation_id": 102269,
+        "boundary_version": 422,
+        "osm_mapping_completeness": "unknown",
+        "roads": {
+          "path": "data/social/osm_moscow_roads_261008.parquet",
+          "manifest": "data/social/osm_moscow_roads_261008.manifest.json",
+          "rows": 463288,
+          "sha256": "0905dbc55bd6f0adfe13c1ef5c3f650dbe63a74ce9e0511a30782248d473a2bb"
+        },
+        "social_pois": {
+          "path": "data/social/osm_moscow_social_pois_261008.parquet",
+          "manifest": "data/social/osm_moscow_social_pois_261008.manifest.json",
+          "rows": 50330,
+          "sha256": "959a3e162cf0350fdeaf2f21e68b1f37ee9990a33b9fef002857e4f56fec957f",
+          "coverage": "citywide extract scope; mapped-feature completeness unknown"
+        },
+        "parks_water": {
+          "manifest": "data/social/osm_moscow_surfaces_261008_v2.manifest.json",
+          "parks_path": "data/social/osm_moscow_parks_261008_v2.parquet",
+          "parks_rows": 1556,
+          "parks_sha256": "d80a6e1989cfea7f9b26cd395fedb100ee67970b17ec0e505f2856b0d265b255",
+          "water_path": "data/social/osm_moscow_water_261008_v2.parquet",
+          "water_rows": 3860,
+          "water_sha256": "3a7e43012a247e8693ea3e0fee683f2cf29cdd45c2c6628b015d1596a2e90671",
+          "waterways_path": "data/social/osm_moscow_waterways_261008_v2.parquet",
+          "waterways_rows": 5857,
+          "waterways_sha256": "7a37f6ccb2d1cd10e5dafd5b08d1a0c88fee7020a4b66fc7386be79940db43c0"
+        },
+        "invalid_superseded_artifacts": [
+          "data/social/osm_moscow_surfaces_261008.manifest.json",
+          "data/social/osm_moscow_parks_261008.parquet",
+          "data/social/osm_moscow_water_261008.parquet",
+          "data/social/osm_moscow_waterways_261008.parquet"
+        ]
+      }
+    },
+    "overpass": {
+      "name": "Overpass API shared public infrastructure",
+      "url": "https://dev.overpass-api.de/overpass-doc/en/preface/commons.html",
+      "rights_gate": "bounded low-impact queries only; no tiled citywide scraping; stop on timeout or rate limiting"
+    },
+    "router_yandex": {
+      "name": "Yandex Maps Router API",
+      "product_url": "https://yandex.com/maps-api/products/router-api",
+      "request_url": "https://yandex.com/maps-api/docs/router-api/request.html",
+      "modes": [
+        "walking",
+        "transit"
+      ],
+      "automation": "candidate; requires operator-owned key and paid product plan",
+      "rights_gate": "confirm product-specific permission to persist route outputs and derived values before citywide batch; Basic/Advanced features and storage rights differ",
+      "response_url": "https://yandex.com/maps-api/docs/router-api/response.html"
+    },
+    "router_2gis": {
+      "name": "2GIS Navigation Routing API",
+      "overview_url": "https://docs.2gis.com/api/navigation/routing/overview",
+      "public_transport_url": "https://docs.2gis.com/api/navigation/routing/reference/public_transport",
+      "terms_url": "https://law.2gis.ru/api-rules",
+      "modes": [
+        "pedestrian",
+        "bus",
+        "tram",
+        "metro"
+      ],
+      "automation": "feature-capable but gated",
+      "rights_gate": "published API terms prohibit saving, processing, modifying or distributing fetched data except a narrow geocoder cache exception; do not persist batch results without a separate written license/permission",
+      "direct_routes_url": "https://docs.2gis.com/api/navigation/routing/examples/options"
+    },
+    "router_valhalla": {
+      "name": "Valhalla open-source pedestrian routing engine",
+      "installation_url": "https://valhalla.github.io/valhalla/start/installation/",
+      "python_docs_url": "https://valhalla.github.io/valhalla/README_python/",
+      "automation": "local graph build and route adapter; no remote calls required",
+      "availability_check": "pyvalhalla 3.9.0 official Linux x86_64 abi3 wheel available; pip dry-run resolved only this package at 37,536,056 bytes; not installed; conda-forge package was not found",
+      "rights_gate": "verify source data licensing and local graph storage; use only explicit pedestrian costing; no graph or routes built yet"
+    },
+    "moscow_oms": {
+      "name": "Moscow Government territorial state-guarantee / OMS program, 2026",
+      "url": "https://dgp69.mos.ru/public/docs/legaldoc/ppm-30-12-2025-3389-pp.pdf?1768375555=",
+      "evidence": "Appendix 3 lists participating medical organizations and separate columns for city-budget assignment and OMS participation.",
+      "refresh": "pin effective program/version; refresh when amended or at next annual program"
+    },
+    "clinic_official": {
+      "name": "Official clinic/provider registry and the clinic's own published service schedule",
+      "url": null,
+      "automation": "source-specific; no unified current public API verified for ownership and paid-service schedules",
+      "rights_gate": "use official provider/registry pages or authorized datasets; do not infer from OSM tags or clinic name"
+    },
+    "dms_insurer": {
+      "name": "Official insurer provider directory for a named DMS product/plan",
+      "url": null,
+      "automation": "source-specific; plan-scoped current provider list may require insurer access",
+      "rights_gate": "record insurer, product/plan, service scope and effective date; no universal clinic-level DMS boolean"
+    },
+    "osm_tag_wiki": {
+      "name": "OSM tagging documentation",
+      "urls": [
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dclinic",
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dkindergarten",
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dschool",
+        "https://wiki.openstreetmap.org/wiki/Tag:leisure%3Dpark",
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dpharmacy",
+        "https://wiki.openstreetmap.org/wiki/Tag:shop%3Dsupermarket",
+        "https://wiki.openstreetmap.org/wiki/Tag:highway%3Dbus_stop",
+        "https://wiki.openstreetmap.org/wiki/Tag:railway%3Dtram_stop",
+        "https://wiki.openstreetmap.org/wiki/Tag:railway%3Dsubway_entrance",
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dpolice",
+        "https://wiki.openstreetmap.org/wiki/Tag:emergency%3Dambulance_station",
+        "https://wiki.openstreetmap.org/wiki/Tag:amenity%3Dfire_station"
+      ],
+      "note": "OSM tag semantics inform classification only; tags do not establish completeness, facility quality or current operation."
+    }
+  },
+  "current_state": {
+    "route_endpoint_configured": false,
+    "transit_connector_configured": false,
+    "public_transit_calls_made": false,
+    "paid_calls_made": false,
+    "sample_proves_citywide_absence": false,
+    "index": null,
+    "valhalla_service_binary_available": false,
+    "valhalla_python_package_available": false,
+    "valhalla_python_package_installed": false,
+    "valhalla_official_linux_wheel_available": true,
+    "valhalla_official_linux_wheel_bytes": 37536056,
+    "valhalla_conda_forge_package_available": false,
+    "valhalla_route_environment_configured": false,
+    "full_city_pbf_le_500mb_found": false,
+    "pbf_downloads_made": true,
+    "citywide_osm_extract_ready": true,
+    "citywide_poi_completeness": "unknown",
+    "citywide_routes_built": false
+  },
+  "criteria": [
+    {
+      "key": "walk_time_clinic_s",
+      "label_ru": "Пешком до клиники",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to clinic public access point; nearest routed clinic inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "clinic POI coverage",
+          "known or explicitly approximate access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; no clinic in sample does not prove absence",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule; persist only under approved route license",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "clinic POI coverage",
+          "known or explicitly approximate access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; no clinic in sample does not prove absence",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_kindergarten_s",
+      "label_ru": "Пешком до детского сада",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to kindergarten public access point; nearest routed kindergarten inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "kindergarten POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; no sample match does not prove absence",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "kindergarten POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; no sample match does not prove absence",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_school_s",
+      "label_ru": "Пешком до школы",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to school public access point; nearest routed school inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "school POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; college/university is not silently treated as a school",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "school POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; college/university is not silently treated as a school",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_park_s",
+      "label_ru": "Пешком до парка",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to park public access point; nearest routed park inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "park geometry/access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; playground or green polygon is not automatically a park",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "park geometry/access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; playground or green polygon is not automatically a park",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_pharmacy_s",
+      "label_ru": "Пешком до аптеки",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to pharmacy public access point; nearest routed pharmacy inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "pharmacy POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "pharmacy POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_supermarket_s",
+      "label_ru": "Пешком до супермаркета",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to supermarket public access point; nearest routed supermarket inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "supermarket POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; convenience shop is not silently counted as a supermarket",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "supermarket POI coverage",
+          "public access points",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; convenience shop is not silently counted as a supermarket",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_bus_stop_s",
+      "label_ru": "Пешком до остановки автобуса",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to waiting platform/stop point; nearest routed bus stop inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "bus-stop/platform coverage",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "bus-stop/platform coverage",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_tram_stop_s",
+      "label_ru": "Пешком до остановки трамвая",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to tram platform/stop point; nearest routed tram stop inside declared source scope",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "tram-stop/platform coverage",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with POI extract and route provider schedule",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "tram-stop/platform coverage",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "walk_time_metro_s",
+      "label_ru": "Пешком до входа в метро",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to a mapped public metro entrance, selected by pedestrian route",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "station-entrance mapping or licensed entrance data",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null when only station center/name is known, no route exists, or entrance coverage is incomplete",
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with entrance geometry and route graph; source license permits persistence",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "station-entrance mapping or licensed entrance data",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null when only station center/name is known, no route exists, or entrance coverage is incomplete",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "nearest_metro_name",
+      "label_ru": "Ближайшая станция метро",
+      "data_type": "string|null",
+      "unit": null,
+      "scope": "station explicitly linked to the minimum-duration pedestrian route to a mapped metro entrance",
+      "source": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "metro entrance-to-station relation/name",
+          "complete declared metro search scope",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown": "null if entrance-to-station association is absent or coverage is incomplete; entrance/exit name alone is not the station name",
+      "evidence": [
+        "osm_tag_wiki",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with station/entrance registry and route graph",
+      "type": "string|null",
+      "filter_operators": [
+        "equals",
+        "in",
+        "contains"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "metro entrance-to-station relation/name",
+          "complete declared metro search scope",
+          "licensed pedestrian router"
+        ]
+      },
+      "unknown_policy": "null if entrance-to-station association is absent or coverage is incomplete; entrance/exit name alone is not the station name",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "metro_transit_bus_tram_time_s",
+      "label_ru": "До метро прямым маршрутом на автобусе/трамвае",
+      "data_type": "number|null",
+      "unit": "s",
+      "scope": "complex entrance to mapped metro entrance via an explicit public-transport route containing bus or tram; direct route only",
+      "source": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "explicit route legs/modes",
+          "zero-transfer/direct result",
+          "metro entrance target"
+        ]
+      },
+      "unknown": "null unless provider returns and verifies a direct route with a bus/tram leg; nearby bus/tram stops never suffice",
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "query-time or provider-defined schedule; no persistent result until storage license is confirmed",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "explicit route legs/modes",
+          "zero-transfer/direct result",
+          "metro entrance target"
+        ]
+      },
+      "unknown_policy": "null unless provider returns and verifies a direct route with a bus/tram leg; nearby bus/tram stops never suffice",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "metro_transit_modes",
+      "label_ru": "Виды транспорта в прямом маршруте до метро",
+      "data_type": "array<string>|null",
+      "unit": null,
+      "scope": "provider-reported pedestrian connector and bus/tram legs for explicit direct route",
+      "source": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "route leg modes"
+        ]
+      },
+      "unknown": "null without an actual route response",
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with route result; obey provider retention terms",
+      "type": "array<string>|null",
+      "filter_operators": [
+        "contains",
+        "in"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "route leg modes"
+        ]
+      },
+      "unknown_policy": "null without an actual route response",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "metro_direct_route",
+      "label_ru": "Есть ли прямой маршрут на автобусе/трамвае до метро",
+      "data_type": "boolean|null",
+      "unit": null,
+      "scope": "provider-confirmed direct itinerary to a metro entrance, zero transfers, at least one bus or tram leg",
+      "source": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "automation": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "explicit direct-route result or route leg/transfer semantics"
+        ]
+      },
+      "unknown": "null unless the provider explicitly checks direct options; absence of a stop or route sample does not mean false",
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "refresh": "with current transit network/schedule; obey provider retention terms",
+      "type": "boolean|null",
+      "filter_operators": [
+        "equals"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "gated",
+        "requires": [
+          "licensed transit router",
+          "explicit direct-route result or route leg/transfer semantics"
+        ]
+      },
+      "unknown_policy": "null unless the provider explicitly checks direct options; absence of a stop or route sample does not mean false",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "distance_police_straight_line_m",
+      "label_ru": "Расстояние по прямой до отделения полиции",
+      "data_type": "number|null",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed police-station point; sample-scoped unless complete source is proven",
+      "source": [
+        "osm"
+      ],
+      "automation": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "police POI geometry"
+        ]
+      },
+      "unknown": "null if no mapped feature; do not present as road/walking distance or evidence of absence",
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with pinned POI extract",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "police POI geometry"
+        ]
+      },
+      "unknown_policy": "null if no mapped feature; do not present as road/walking distance or evidence of absence",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "distance_ambulance_station_straight_line_m",
+      "label_ru": "Расстояние по прямой до станции скорой помощи",
+      "data_type": "number|null",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed ambulance-station point; sample-scoped unless complete source is proven",
+      "source": [
+        "osm"
+      ],
+      "automation": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "ambulance-station POI geometry"
+        ]
+      },
+      "unknown": "null if no mapped feature; do not count hospital or patient-transfer service as an ambulance station without a source tag/registry",
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with pinned POI extract",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "ambulance-station POI geometry"
+        ]
+      },
+      "unknown_policy": "null if no mapped feature; do not count hospital or patient-transfer service as an ambulance station without a source tag/registry",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "distance_fire_station_straight_line_m",
+      "label_ru": "Расстояние по прямой до пожарной части",
+      "data_type": "number|null",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed fire-station point; sample-scoped unless complete source is proven",
+      "source": [
+        "osm"
+      ],
+      "automation": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "fire-station POI geometry"
+        ]
+      },
+      "unknown": "null if no mapped feature; do not present as travel distance or evidence of absence",
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "refresh": "with pinned POI extract",
+      "type": "number|null",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "high for observed geometry",
+        "requires": [
+          "fire-station POI geometry"
+        ]
+      },
+      "unknown_policy": "null if no mapped feature; do not present as travel distance or evidence of absence",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "nearest_clinic_ownership_type",
+      "label_ru": "Форма собственности ближайшей клиники",
+      "data_type": "enum|null",
+      "enum": [
+        "public",
+        "private",
+        "nonprofit",
+        "other",
+        "unknown"
+      ],
+      "unit": null,
+      "scope": "facility record linked to nearest observed/routed clinic; preserve source record and effective date",
+      "source": [
+        "clinic_official"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "verified facility identity join",
+          "official current provider/legal registry"
+        ]
+      },
+      "unknown": "null until an authoritative facility-level record is joined; do not infer from name, OSM tags, price or OMS participation",
+      "evidence": [
+        "clinic_official"
+      ],
+      "refresh": "registry/provider-defined; check at least when source version changes",
+      "type": "enum|null",
+      "filter_operators": [
+        "equals",
+        "in"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "verified facility identity join",
+          "official current provider/legal registry"
+        ]
+      },
+      "unknown_policy": "null until an authoritative facility-level record is joined; do not infer from name, OSM tags, price or OMS participation",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "nearest_clinic_oms_participation",
+      "label_ru": "Участие ближайшей клиники в программе ОМС",
+      "data_type": "boolean|null",
+      "unit": null,
+      "scope": "facility and effective territorial OMS program/year",
+      "source": [
+        "moscow_oms"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "verified facility identity/code",
+          "current Moscow territorial-program list"
+        ]
+      },
+      "unknown": "null if the facility cannot be matched or the list period is stale; OMS participation does not mean every service is free",
+      "evidence": [
+        "moscow_oms"
+      ],
+      "refresh": "when annual program or amendment takes effect",
+      "type": "boolean|null",
+      "filter_operators": [
+        "equals"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "verified facility identity/code",
+          "current Moscow territorial-program list"
+        ]
+      },
+      "unknown_policy": "null if the facility cannot be matched or the list period is stale; OMS participation does not mean every service is free",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "nearest_clinic_has_paid_services",
+      "label_ru": "Есть ли у ближайшей клиники платные услуги",
+      "data_type": "boolean|null",
+      "unit": null,
+      "scope": "provider-published price/service schedule, at schedule effective date",
+      "source": [
+        "clinic_official"
+      ],
+      "automation": {
+        "feasibility": "conditional",
+        "requires": [
+          "official published fee schedule or explicit statement"
+        ]
+      },
+      "unknown": "null unless current provider evidence states this; an OMS record does not imply all services are free, and private ownership does not prove all care is paid",
+      "evidence": [
+        "clinic_official",
+        "moscow_oms"
+      ],
+      "refresh": "when provider price/service schedule changes",
+      "type": "boolean|null",
+      "filter_operators": [
+        "equals"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "conditional",
+        "requires": [
+          "official published fee schedule or explicit statement"
+        ]
+      },
+      "unknown_policy": "null unless current provider evidence states this; an OMS record does not imply all services are free, and private ownership does not prove all care is paid",
+      "coverage_requirement": "complete"
+    },
+    {
+      "key": "nearest_clinic_dms_networks",
+      "label_ru": "Страховые программы ДМС, в которых клиника указана",
+      "data_type": "array<object>|null",
+      "unit": null,
+      "scope": "insurer + named DMS product/plan + services + effective period; not a universal clinic flag",
+      "source": [
+        "dms_insurer"
+      ],
+      "automation": {
+        "feasibility": "gated",
+        "requires": [
+          "official insurer network directory or authorized feed",
+          "plan/service scope",
+          "effective date"
+        ]
+      },
+      "unknown": "null without current insurer evidence; do not conflate DMS with OMS or infer acceptance from clinic ownership",
+      "evidence": [
+        "dms_insurer"
+      ],
+      "refresh": "per insurer directory update/effective date; revalidate before display",
+      "type": "array<object>|null",
+      "filter_operators": [
+        "contains",
+        "in"
+      ],
+      "automatic_feasibility": {
+        "feasibility": "gated",
+        "requires": [
+          "official insurer network directory or authorized feed",
+          "plan/service scope",
+          "effective date"
+        ]
+      },
+      "unknown_policy": "null without current insurer evidence; do not conflate DMS with OMS or infer acceptance from clinic ownership",
+      "coverage_requirement": "complete"
+    }
+  ]
+}

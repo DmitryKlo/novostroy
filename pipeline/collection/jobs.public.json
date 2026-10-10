@@ -1,0 +1,31 @@
+{
+  "version": "1",
+  "jobs": [
+    {
+      "job_id": "minstroy_construction_public_http",
+      "kind": "public_http_registry",
+      "enabled": true,
+      "source_id": "minstroy_construction_permits",
+      "dataset_kind": "construction_permit",
+      "data_mode": "public_registry",
+      "page_url": "https://minstroyrf.gov.ru/opendata/7707780887-reestrstroit/",
+      "manifest_path": "data/property/minstroy/source_manifest.json",
+      "max_page_bytes": 262144,
+      "max_bytes": 4194304,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "minstroy_commissioning_public_http",
+      "kind": "public_http_registry",
+      "enabled": true,
+      "source_id": "minstroy_commissioning_permits",
+      "dataset_kind": "commissioning_permit",
+      "data_mode": "public_registry",
+      "page_url": "https://minstroyrf.gov.ru/opendata/7707780887-puttingintooperation/",
+      "manifest_path": "data/property/minstroy/source_manifest.json",
+      "max_page_bytes": 262144,
+      "max_bytes": 2097152,
+      "min_interval_seconds": 0
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh reviewed Minstroy public registry snapshots
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pirojban/novostroy
+ExecStart=/home/pirojban/novostroy/.runtime/dev-env/bin/python -m pipeline.collection --config pipeline/collection/jobs.public.json --apply --allow-network
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/pirojban/novostroy/data/runtime/collection
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+TimeoutStartSec=120s

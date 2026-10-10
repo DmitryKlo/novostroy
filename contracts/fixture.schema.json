@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Novostroy local demo fixture v1",
+  "type": "object",
+  "required": ["version", "snapshot_id", "snapshot_at", "data_mode", "districts", "complexes", "offers"],
+  "properties": {
+    "version": {"const": "1"},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "snapshot_at": {"type": "string", "format": "date-time"},
+    "data_mode": {"const": "demo"},
+    "center": {"$ref": "./schemas.json#/$defs/LonLat"},
+    "districts": {"type": "array", "items": {"$ref": "./schemas.json#/$defs/District"}},
+    "complexes": {"type": "array", "items": {"$ref": "./schemas.json#/$defs/Complex"}},
+    "offers": {"type": "array", "items": {"$ref": "./schemas.json#/$defs/Offer"}},
+    "tilesets": {"type": "array", "items": {"$ref": "./schemas.json#/$defs/Tileset"}},
+    "city_buildings": {"type": "array", "items": {"type": "object"}},
+    "pois": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": true
+}

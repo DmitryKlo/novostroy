@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novostroy.local/contracts/cian-review.schema.json",
+  "title": "Private CIAN observation review artifact v1",
+  "description": "Internal dated observations only. This schema does not authorize live collection, public offer import, or media publication.",
+  "oneOf": [
+    {"$ref": "#/$defs/Observation"},
+    {"$ref": "#/$defs/Manifest"}
+  ],
+  "$defs": {
+    "Sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "Counter": {
+      "type": "object", "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "Price": {
+      "type": "object", "required": ["amount_rub", "basis", "observed_at"],
+      "properties": {
+        "amount_rub": {"type": "integer", "minimum": 1},
+        "basis": {"const": "asking_total"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }, "additionalProperties": false
+    },
+    "PrivatePriceBasis": {
+      "type": "object",
+      "required": ["displayed_total_rub", "source_total_rub", "displayed_per_sqm_rub", "source_per_sqm_rub", "currency", "unit", "price_marked_as_from", "unit_specific_discount_or_financing_condition_visible", "unit_specific_discount_or_credit_condition_visible"],
+      "properties": {
+        "displayed_total_rub": {"type": ["integer", "null"], "minimum": 1},
+        "source_total_rub": {"type": ["integer", "null"], "minimum": 1},
+        "displayed_per_sqm_rub": {"type": ["integer", "null"], "minimum": 1},
+        "source_per_sqm_rub": {"type": ["integer", "null"], "minimum": 1},
+        "currency": {"enum": ["RUB", null]},
+        "unit": {"enum": ["listing_total", "per_square_metre_only", "unknown"]},
+        "price_marked_as_from": {"type": ["boolean", "null"]},
+        "unit_specific_discount_or_financing_condition_visible": {"type": ["boolean", "null"]},
+        "unit_specific_discount_or_credit_condition_visible": {"type": ["boolean", "null"]}
+      }, "additionalProperties": false
+    },
+    "MediaCandidate": {
+      "type": "object",
+      "required": ["media_ref_id", "role", "visual_kind", "source_url", "listing_url", "listing_id", "corpus_id", "source_field", "caption", "section_label", "type_label", "evidence_label", "classification_basis", "observed_at", "publisher_updated_at", "publisher", "source_rights_status", "rights_status", "approved_media_host", "fetch_status", "public_display_allowed"],
+      "properties": {
+        "media_ref_id": {"type": "string", "pattern": "^cian_media_[a-f0-9]{24}$"},
+        "role": {"enum": ["apartment_plan", "floor_plan", "facade_image", "photo", "unknown"]},
+        "visual_kind": {"enum": ["render", "photo", "unknown"]},
+        "source_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "listing_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "listing_id": {"type": ["string", "null"]},
+        "corpus_id": {"type": ["string", "null"]},
+        "source_field": {"type": ["string", "null"], "maxLength": 256},
+        "caption": {"type": ["string", "null"], "maxLength": 256},
+        "section_label": {"type": ["string", "null"], "maxLength": 256},
+        "type_label": {"type": ["string", "null"], "maxLength": 256},
+        "evidence_label": {"type": ["string", "null"], "maxLength": 256},
+        "classification_basis": {"type": "string", "minLength": 1},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "publisher_updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "publisher": {"type": ["string", "null"], "maxLength": 256},
+        "source_rights_status": {"enum": ["cleared", "restricted", "unknown", "demo"]},
+        "rights_status": {"enum": ["cleared", "restricted", "unknown", "demo"]},
+        "approved_media_host": {"type": "boolean"},
+        "fetch_status": {"const": "not_requested"},
+        "public_display_allowed": {"const": false}
+      }, "additionalProperties": false
+    },
+    "Observation": {
+      "type": "object",
+      "required": ["schema_version", "payload_kind", "record_type", "data_mode", "listing_id", "source_url", "observed_at", "source_updated_at", "market_kind", "market_channel", "market_evidence", "complex_label", "complex_id", "unit_id", "location", "price_kind", "price", "stated_price_per_sqm_rub", "rooms", "area_sqm", "living_area_sqm", "kitchen_area_sqm", "floor", "building_floors", "handover_year", "availability", "media", "media_file_count", "media_labels_observed", "rights_status", "review_reasons", "source_capture_sha256", "source_fields"],
+      "properties": {
+        "schema_version": {"const": "cian-review/1"},
+        "payload_kind": {"enum": ["public_observation", "authorized_export", "authorized_html"]},
+        "record_type": {"const": "listing_observation"},
+        "data_mode": {"const": "real"},
+        "listing_id": {"type": "string", "pattern": "^[0-9]{1,20}$"},
+        "source_url": {"type": "string", "format": "uri", "pattern": "^https://(?:www\\.)?cian\\.ru/sale/flat/[0-9]+/?$"},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "source_updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "market_kind": {"enum": ["newbuild", "resale", "unknown"]},
+        "market_channel": {"enum": ["developer_primary", "assignment", "resale", "unknown"]},
+        "market_evidence": {"type": "array", "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 180}},
+        "complex_label": {"type": ["string", "null"], "maxLength": 180},
+        "complex_id": {"type": ["string", "null"]},
+        "unit_id": {"type": ["string", "null"]},
+        "location": {"type": "null"},
+        "price_kind": {"enum": ["unit_asking", "project_from", "conditional", "unknown"]},
+        "price": {"anyOf": [{"$ref": "#/$defs/Price"}, {"type": "null"}]},
+        "stated_price_per_sqm_rub": {"type": ["integer", "null"], "minimum": 1},
+        "rooms": {"type": ["integer", "null"], "minimum": 0, "maximum": 30},
+        "area_sqm": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "living_area_sqm": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "kitchen_area_sqm": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "floor": {"type": ["integer", "null"], "minimum": 0, "maximum": 500},
+        "building_floors": {"type": ["integer", "null"], "minimum": 0, "maximum": 500},
+        "handover_year": {"type": ["integer", "null"], "minimum": 1900, "maximum": 2100},
+        "availability": {"const": "unknown"},
+        "media": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/MediaCandidate"}},
+        "media_file_count": {"const": 0},
+        "media_labels_observed": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 80}},
+        "rights_status": {"enum": ["cleared", "restricted", "unknown"]},
+        "review_reasons": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "source_capture_sha256": {"$ref": "#/$defs/Sha256"},
+        "source_fields": {"type": "object", "required": ["displayed_price_basis"], "properties": {
+          "new_build_label": {"type": ["boolean", "null"]},
+          "deal_type_text": {"type": ["string", "null"]},
+          "advertiser_category_text": {"type": ["string", "null"]},
+          "displayed_price_basis": {"$ref": "#/$defs/PrivatePriceBasis"}
+        }, "additionalProperties": false}
+      },
+      "allOf": [
+        {"if": {"properties": {"price_kind": {"const": "unit_asking"}}}, "then": {"properties": {"price": {"$ref": "#/$defs/Price"}}}, "else": {"properties": {"price": {"type": "null"}}}},
+        {"if": {"properties": {"payload_kind": {"const": "public_observation"}}}, "then": {"properties": {"rights_status": {"enum": ["unknown", "restricted"]}, "complex_id": {"type": "null"}, "unit_id": {"type": "null"}, "media": {"maxItems": 0}}}}
+      ],
+      "additionalProperties": false
+    },
+    "Manifest": {
+      "type": "object",
+      "required": ["schema_version", "run_id", "input_sha256", "observations_sha256", "records_total", "duplicate_records", "non_unit_pages_skipped", "capture_kinds", "market_kinds", "market_channels", "price_kinds", "rights_statuses", "media_descriptors", "media_statuses", "review_reasons", "media_files_downloaded", "live_fetches", "public_offer_imported"],
+      "properties": {
+        "schema_version": {"const": "cian-review/1"},
+        "run_id": {"type": "string", "pattern": "^cian-review-[a-f0-9]{16}$"},
+        "input_sha256": {"$ref": "#/$defs/Sha256"},
+        "observations_sha256": {"$ref": "#/$defs/Sha256"},
+        "records_total": {"type": "integer", "minimum": 1},
+        "duplicate_records": {"type": "integer", "minimum": 0},
+        "non_unit_pages_skipped": {"$ref": "#/$defs/Counter"},
+        "capture_kinds": {"$ref": "#/$defs/Counter"},
+        "market_kinds": {"$ref": "#/$defs/Counter"},
+        "market_channels": {"$ref": "#/$defs/Counter"},
+        "price_kinds": {"$ref": "#/$defs/Counter"},
+        "rights_statuses": {"$ref": "#/$defs/Counter"},
+        "media_descriptors": {"type": "integer", "minimum": 0},
+        "media_statuses": {"$ref": "#/$defs/Counter"},
+        "review_reasons": {"$ref": "#/$defs/Counter"},
+        "media_files_downloaded": {"const": 0},
+        "live_fetches": {"const": 0},
+        "public_offer_imported": {"const": false}
+      }, "additionalProperties": false
+    }
+  }
+}

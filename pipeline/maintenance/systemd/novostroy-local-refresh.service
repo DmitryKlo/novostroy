@@ -1,0 +1,14 @@
+[Unit]
+Description=Validate and refresh approved local Novostroy snapshots
+After=local-fs.target
+StartLimitIntervalSec=2h
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+Restart=on-failure
+RestartSec=10m
+WorkingDirectory=/home/pirojban/novostroy
+ExecStart=/home/pirojban/novostroy/.runtime/dev-env/bin/python -m pipeline.maintenance.refresh run
+TimeoutStartSec=7200
+Environment=PYTHONUNBUFFERED=1

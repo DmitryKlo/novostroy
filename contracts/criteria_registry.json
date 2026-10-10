@@ -1,0 +1,1418 @@
+{
+  "version": "1.1",
+  "criteria": [
+    {
+      "key": "air.district_cleanliness_rank",
+      "label_ru": "Рейтинг чистоты воздуха района",
+      "group": "environment",
+      "type": "object|null",
+      "value_type": "object",
+      "unit": "source_defined_rank_or_rating",
+      "scope": "district",
+      "operators": [],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": false,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "Official sources found describe stations and field measurements, not a current, machine-readable cleanliness ranking for each Moscow district.",
+      "unknown_policy": "unknown; never derive a district score from station readings, emissions, complaints, or historical AO composite rankings",
+      "refresh": "recheck official Moscow datasets and their methodology before enabling"
+    },
+    {
+      "key": "air.station_observations",
+      "label_ru": "Наблюдения станций качества воздуха",
+      "group": "environment",
+      "type": "array<object>|null",
+      "value_type": "object_array",
+      "unit": "source_defined_concentration_units",
+      "scope": "station_and_time",
+      "operators": [],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": false,
+      "coverage_requirement": "source_scope",
+      "coverage_note": null,
+      "source_ids": [
+        "moscow_air_station_monitoring",
+        "moscow_air_mobile_lab"
+      ],
+      "evidence": "Retain pollutant, value, unit, station/place, timestamp, and source quality flags only when supplied by the source.",
+      "unknown_policy": "unknown if endpoint, station, pollutant, unit, time, QA flag, or terms are missing; do not reinterpret as district cleanliness",
+      "refresh": "source-defined; record each observation timestamp and retrieval time"
+    },
+    {
+      "key": "amenity.playground_count_500m",
+      "label_ru": "Игровые площадки на карте в радиусе 500 м",
+      "group": "environment",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "mapped_features_within_500m",
+      "scope": "building_or_property_point",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "source_scope",
+      "coverage_note": null,
+      "source_ids": [
+        "openstreetmap_playgrounds_and_aerodromes"
+      ],
+      "evidence": "Count OSM leisure=playground geometries intersecting a 500m metric buffer; deduplicate stable OSM element type/id and retain versions.",
+      "unknown_policy": "0 means none found within the examined source snapshot/coverage only; expose coverage and snapshot; never call it confirmed real-world absence",
+      "refresh": "on OSM snapshot/replication date change"
+    },
+    {
+      "key": "building.apartments_per_floor",
+      "label_ru": "Квартир на этаже",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "apartment/floor",
+      "scope": "building_section",
+      "operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "bnmap_get_prices"
+      ],
+      "evidence": "bnMAP numInPlatform is documented as the lot number on a floor, not total apartment count on that floor",
+      "unknown_policy": "unknown unless source explicitly provides a count; never infer from a lot's sequence number",
+      "refresh": "on floor-inventory source revision"
+    },
+    {
+      "key": "building.cctv",
+      "label_ru": "Видеонаблюдение",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "No reviewed new-build structured field specifically documents CCTV",
+      "unknown_policy": "unknown unless an authorized structured source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available"
+    },
+    {
+      "key": "building.ceiling_height_m",
+      "label_ru": "Высота потолка, м",
+      "group": "property",
+      "type": "decimal|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "building",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL ceiling-height is defined in metres",
+      "unknown_policy": "unknown if absent or invalid; do not substitute a floorplan estimate",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.closed_territory",
+      "label_ru": "Закрытая территория",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL guarded-building is explicitly defined as closed territory and supports yes/no values",
+      "unknown_policy": "unknown if tag missing or unparsable; preserve explicit false; do not treat security staff as equivalent",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.concierge",
+      "label_ru": "Консьерж",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "No reviewed new-build structured field specifically documents concierge service",
+      "unknown_policy": "unknown unless an authorized structured source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available"
+    },
+    {
+      "key": "building.construction_start_year",
+      "label_ru": "Год начала строительства",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "year",
+      "scope": "building",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "evidence": "bnMAP start_sales is sales start, not construction start; reviewed YRL completion fields do not specify construction start; EISЖС may contain project declarations but exact field unverified",
+      "unknown_policy": "unknown unless an authorized source explicitly reports construction start date/year; never relabel sales start",
+      "refresh": "when project declaration/source revision changes"
+    },
+    {
+      "key": "building.elevator_count",
+      "label_ru": "Количество лифтов",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "elevator",
+      "scope": "building",
+      "operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL lift is a boolean presence field; it has no elevator count",
+      "unknown_policy": "unknown unless an authorized source provides explicit count; never convert lift=true to 1",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.energy_class",
+      "label_ru": "Класс энергоэффективности",
+      "group": "property",
+      "type": "A|B|C|D|E|F|G|string|null",
+      "value_type": "enum",
+      "unit": "class",
+      "scope": "building",
+      "operators": [
+        "equals",
+        "in"
+      ],
+      "enum_values": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "eiszh_api"
+      ],
+      "evidence": "Official EISЖС API announcement confirms energy-efficiency information was added, but accessible public evidence does not confirm an exact energy_class field or class scale",
+      "unknown_policy": "unknown until the authorized specification confirms field, scale, scope, and rights; do not infer from general efficiency descriptions",
+      "refresh": "when authorized declaration/API revision changes"
+    },
+    {
+      "key": "building.expected_completion_year",
+      "label_ru": "Ожидаемый год окончания строительства",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "year",
+      "scope": "building",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "evidence": "YRL built-year/ready-quarter describe building handover/completion and key-handover-date is distinct; bnMAP dsc is planned commissioning date; EISЖС may contain handover data but exact field gated",
+      "unknown_policy": "unknown when date absent/invalid; retain quarter/date precision and do not confuse key handover with commissioning",
+      "refresh": "per source revision; update expected dates when new source snapshot appears"
+    },
+    {
+      "key": "building.freight_elevator_count",
+      "label_ru": "Грузовые лифты",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "elevator",
+      "scope": "building",
+      "operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "Reviewed YRL new-build building fields document only lift presence, not passenger/freight counts or types",
+      "unknown_policy": "unknown unless explicitly supplied by an authorized structured source",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.guarded_parking_present",
+      "label_ru": "Охраняемая парковка есть",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL parking is presence of guarded parking; false does not establish that all parking is absent",
+      "unknown_policy": "unknown if omitted or invalid; preserve explicit false; do not map false to parking_type=none",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.lift_present",
+      "label_ru": "Лифт есть",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL lift is a yes/no presence field",
+      "unknown_policy": "unknown if omitted or invalid; preserve explicit false; never infer a count",
+      "refresh": "on building source revision"
+    },
+    {
+      "key": "building.parking_type",
+      "label_ru": "Тип парковки",
+      "group": "property",
+      "type": "underground|surface|none|null",
+      "value_type": "enum",
+      "unit": "enum",
+      "scope": "building_or_complex",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [
+        "underground",
+        "surface",
+        "none"
+      ],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "bnmap_get_prices",
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "bnMAP parking_type is at project scope. YRL parking is a boolean for presence of guarded parking, not underground/surface/none.",
+      "unknown_policy": "unknown unless source explicitly supplies a mapped parking type; YRL parking=false does not prove no parking; absence is not none",
+      "refresh": "on source revision; preserve source scope"
+    },
+    {
+      "key": "building.security",
+      "label_ru": "Охрана",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL guarded-building means closed territory and is not equivalent to security staff/service",
+      "unknown_policy": "unknown unless a source explicitly documents building security; do not map closed territory to security",
+      "refresh": "on authorized source revision"
+    },
+    {
+      "key": "complex.internet_providers",
+      "label_ru": "Интернет-провайдеры",
+      "group": "property",
+      "type": "array<string>|null",
+      "value_type": "string_array",
+      "unit": "provider name",
+      "scope": "complex_or_building",
+      "operators": [
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "No reviewed structured new-build YRL or bnMAP price-list field lists providers",
+      "unknown_policy": "unknown unless an authorized, dated structured provider source supplies the list; preserve empty list only when explicit",
+      "refresh": "refresh when the provider source revision changes"
+    },
+    {
+      "key": "complex.playground_onsite",
+      "label_ru": "Детская площадка на территории",
+      "group": "property",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": "boolean",
+      "scope": "complex_or_building",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "No reviewed YRL or bnMAP field establishes an onsite playground; marketing text/map context is not structured evidence",
+      "unknown_policy": "unknown until an authorized source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available"
+    },
+    {
+      "key": "distance_ambulance_station_straight_line_m",
+      "label_ru": "Расстояние по прямой до станции скорой помощи",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed ambulance-station point; sample-scoped unless complete source is proven",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm"
+      ],
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null if no mapped feature; do not count hospital or patient-transfer service as an ambulance station without a source tag/registry",
+      "refresh": "with pinned POI extract"
+    },
+    {
+      "key": "distance_fire_station_straight_line_m",
+      "label_ru": "Расстояние по прямой до пожарной части",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed fire-station point; sample-scoped unless complete source is proven",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm"
+      ],
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null if no mapped feature; do not present as travel distance or evidence of absence",
+      "refresh": "with pinned POI extract"
+    },
+    {
+      "key": "distance_police_straight_line_m",
+      "label_ru": "Расстояние по прямой до отделения полиции",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "Haversine distance from complex access point to nearest observed police-station point; sample-scoped unless complete source is proven",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm"
+      ],
+      "evidence": [
+        "osm",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null if no mapped feature; do not present as road/walking distance or evidence of absence",
+      "refresh": "with pinned POI extract"
+    },
+    {
+      "key": "location.moscow_district_membership",
+      "label_ru": "Район Москвы по границе карты",
+      "group": "environment",
+      "type": "string|null",
+      "value_type": "string",
+      "unit": "district_id",
+      "scope": "property_point",
+      "operators": [
+        "equals",
+        "in"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "overture_divisions",
+        "moscow_district_legal_text"
+      ],
+      "evidence": "The pinned Overture/OSM extraction contains 130 unique district-name polygons; the official 2024 district-administration list is indexed to 133. Candidate polygon union covers 98.817697% of the selected OSM city-mask area, leaving 1.182303% uncovered by planar WGS84 area ratio. This does not validate legal names or coverage.",
+      "unknown_policy": "unknown on gap, overlap, incomplete mapped set, ambiguous name, or unverified boundary update; mapped district result is not legal certification",
+      "refresh": "on boundary dataset or applicable Moscow law revision"
+    },
+    {
+      "key": "metro_direct_route",
+      "label_ru": "Есть ли прямой маршрут на автобусе/трамвае до метро",
+      "group": "social",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": null,
+      "scope": "provider-confirmed direct itinerary to a metro entrance, zero transfers, at least one bus or tram leg",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null unless the provider explicitly checks direct options; absence of a stop or route sample does not mean false",
+      "refresh": "with current transit network/schedule; obey provider retention terms"
+    },
+    {
+      "key": "metro_transit_bus_tram_time_s",
+      "label_ru": "До метро прямым маршрутом на автобусе/трамвае",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to mapped metro entrance via an explicit public-transport route containing bus or tram; direct route only",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null unless provider returns and verifies a direct route with a bus/tram leg; nearby bus/tram stops never suffice",
+      "refresh": "query-time or provider-defined schedule; no persistent result until storage license is confirmed"
+    },
+    {
+      "key": "metro_transit_modes",
+      "label_ru": "Виды транспорта в прямом маршруте до метро",
+      "group": "social",
+      "type": "array<string>|null",
+      "value_type": "string_array",
+      "unit": null,
+      "scope": "provider-reported pedestrian connector and bus/tram legs for explicit direct route",
+      "operators": [
+        "contains",
+        "in"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null without an actual route response",
+      "refresh": "with route result; obey provider retention terms"
+    },
+    {
+      "key": "nearest_clinic_dms_networks",
+      "label_ru": "Страховые программы ДМС, в которых клиника указана",
+      "group": "social",
+      "type": "array<object>|null",
+      "value_type": "object_array",
+      "unit": null,
+      "scope": "insurer + named DMS product/plan + services + effective period; not a universal clinic flag",
+      "operators": [],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": false,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "dms_insurer"
+      ],
+      "evidence": [
+        "dms_insurer"
+      ],
+      "unknown_policy": "null without current insurer evidence; do not conflate DMS with OMS or infer acceptance from clinic ownership",
+      "refresh": "per insurer directory update/effective date; revalidate before display"
+    },
+    {
+      "key": "nearest_clinic_has_paid_services",
+      "label_ru": "Есть ли у ближайшей клиники платные услуги",
+      "group": "social",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": null,
+      "scope": "provider-published price/service schedule, at schedule effective date",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "clinic_official"
+      ],
+      "evidence": [
+        "clinic_official",
+        "moscow_oms"
+      ],
+      "unknown_policy": "null unless current provider evidence states this; an OMS record does not imply all services are free, and private ownership does not prove all care is paid",
+      "refresh": "when provider price/service schedule changes"
+    },
+    {
+      "key": "nearest_clinic_oms_participation",
+      "label_ru": "Участие ближайшей клиники в программе ОМС",
+      "group": "social",
+      "type": "boolean|null",
+      "value_type": "boolean",
+      "unit": null,
+      "scope": "facility and effective territorial OMS program/year",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "moscow_oms"
+      ],
+      "evidence": [
+        "moscow_oms"
+      ],
+      "unknown_policy": "null if the facility cannot be matched or the list period is stale; OMS participation does not mean every service is free",
+      "refresh": "when annual program or amendment takes effect"
+    },
+    {
+      "key": "nearest_clinic_ownership_type",
+      "label_ru": "Форма собственности ближайшей клиники",
+      "group": "social",
+      "type": "enum|null",
+      "value_type": "enum",
+      "unit": null,
+      "scope": "facility record linked to nearest observed/routed clinic; preserve source record and effective date",
+      "operators": [
+        "equals",
+        "in"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "clinic_official"
+      ],
+      "evidence": [
+        "clinic_official"
+      ],
+      "unknown_policy": "null until an authoritative facility-level record is joined; do not infer from name, OSM tags, price or OMS participation",
+      "refresh": "registry/provider-defined; check at least when source version changes"
+    },
+    {
+      "key": "nearest_metro_name",
+      "label_ru": "Ближайшая станция метро",
+      "group": "social",
+      "type": "string|null",
+      "value_type": "string",
+      "unit": null,
+      "scope": "station explicitly linked to the minimum-duration pedestrian route to a mapped metro entrance",
+      "operators": [
+        "equals",
+        "in",
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm_tag_wiki",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if entrance-to-station association is absent or coverage is incomplete; entrance/exit name alone is not the station name",
+      "refresh": "with station/entrance registry and route graph"
+    },
+    {
+      "key": "noise.measured_db_a",
+      "label_ru": "Измеренный уровень шума",
+      "group": "environment",
+      "type": "array<object>|null",
+      "value_type": "object_array",
+      "unit": "dB(A)",
+      "scope": "measurement_location_and_time",
+      "operators": [],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": false,
+      "coverage_requirement": "source_scope",
+      "coverage_note": null,
+      "source_ids": [
+        "moscow_noise_mobile_lab"
+      ],
+      "evidence": "Source documentation establishes periodic mobile-laboratory noise monitoring; exact measurement field names and equivalent/maximum level semantics require current dataset metadata.",
+      "unknown_policy": "unknown when no measured record matches; preserve observation time/place/source class and distinct equivalent/max metrics if documented; no inferred value",
+      "refresh": "monthly source publication if confirmed; store retrieval and measurement times separately"
+    },
+    {
+      "key": "noise_proxy.airport_geometry_distance_m",
+      "label_ru": "Расстояние до аэропорта (прокси)",
+      "group": "environment",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "building_or_property_point",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "source_scope",
+      "coverage_note": null,
+      "source_ids": [
+        "openstreetmap_playgrounds_and_aerodromes"
+      ],
+      "evidence": "Minimum local projected distance to mapped aeroway=aerodrome point/area geometry; preserve whether input was a point or polygon and its OSM ID/version.",
+      "unknown_policy": "unknown if no airport geometry is present in source coverage; this is not flight-path, aircraft-frequency, or acoustic exposure",
+      "refresh": "on pinned OSM snapshot refresh"
+    },
+    {
+      "key": "noise_proxy.major_road_distance_m",
+      "label_ru": "Расстояние до крупной дороги (прокси)",
+      "group": "environment",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "m",
+      "scope": "building_or_property_point",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "source_scope",
+      "coverage_note": null,
+      "source_ids": [
+        "overture_transportation"
+      ],
+      "evidence": "Minimum planar-local distance to Overture road segment geometry whose class is exactly one of motorway, trunk, primary; the class set is a versioned product policy.",
+      "unknown_policy": "unknown if source coverage or geometry is missing; report selected nearest segment ID/class/release; this is proximity only and must never be labeled dB, measured noise, or acoustic exposure",
+      "refresh": "on Overture release change or class-policy change"
+    },
+    {
+      "key": "offer.price_per_sqm_rub",
+      "label_ru": "Цена за м², ₽",
+      "group": "property",
+      "type": "{numerator_rub:integer,denominator_sqm:decimal-string}|null",
+      "value_type": "ratio",
+      "unit": "RUB/m2",
+      "scope": "offer",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "evidence": "derive from eligible total RUB asking price and positive total area; bnMAP squarePrice and YRL area-priced value remain preserved as raw source fields and are not accepted as this canonical derived value",
+      "unknown_policy": "unknown unless both eligible inputs exist; derived value must be exact ratio and identify both source fields, their observed_at/provenance, and formula; do not calculate from conditional total unless explicitly requested as a separate field",
+      "refresh": "recompute whenever either input changes; retain input timestamps"
+    },
+    {
+      "key": "offer.price_total_rub",
+      "label_ru": "Цена квартиры, ₽",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "RUB",
+      "scope": "offer",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "evidence": "YRL price.value plus currency/unit and optional discount.final-price; bnMAP price is documented as declared purchase budget. Keep conditional discounts as separate conditional price evidence, not the base asking total.",
+      "unknown_policy": "unknown if absent, nonnumeric, currency/unit unsupported, or rights not cleared; never use booking/transaction values as current asking price",
+      "refresh": "capture observed_at for every row; refresh on each authorized source snapshot; apply offer freshness cutoff from contracts"
+    },
+    {
+      "key": "offer.purchase_methods",
+      "label_ru": "Способы покупки",
+      "group": "property",
+      "type": "array<cash|mortgage|installment>|null",
+      "value_type": "string_array",
+      "unit": "enum",
+      "scope": "offer",
+      "operators": [
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL deal-status describes sale/legal modality; free-form description may mention mortgage but is not a documented structured payment-method field",
+      "unknown_policy": "unknown unless an authorized structured source explicitly reports methods; never infer cash/mortgage/installment from deal-status, generic advertising text, or absence",
+      "refresh": "refresh with each authorized offer snapshot"
+    },
+    {
+      "key": "unit.area_sqm",
+      "label_ru": "Площадь, м²",
+      "group": "property",
+      "type": "decimal|null",
+      "value_type": "decimal",
+      "unit": "m²",
+      "scope": "unit",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "evidence": "YRL area.value/unit and bnMAP square are documented; EISЖС official summary describes premises area but exact fields are unverified",
+      "unknown_policy": "unknown for absent, invalid, or unrecognized units; preserve raw unit and source field",
+      "refresh": "per source revision/offer snapshot"
+    },
+    {
+      "key": "unit.balcony",
+      "label_ru": "Балкон или лоджия",
+      "group": "property",
+      "type": "string|null",
+      "value_type": "string",
+      "unit": "source vocabulary",
+      "scope": "unit",
+      "operators": [
+        "equals",
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL balcony values include balcony, loggia, and multiple balconies/loggias",
+      "unknown_policy": "unknown if absent; do not infer no balcony",
+      "refresh": "per offer snapshot"
+    },
+    {
+      "key": "unit.bathroom_count",
+      "label_ru": "Количество санузлов",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "bathroom",
+      "scope": "unit",
+      "operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL bathroom-unit accepts either combined/separate type or a numeric count",
+      "unknown_policy": "unknown for omitted or type-only values; do not derive count from type",
+      "refresh": "per offer snapshot"
+    },
+    {
+      "key": "unit.bathroom_type",
+      "label_ru": "Тип санузла",
+      "group": "property",
+      "type": "combined|separate|null",
+      "value_type": "enum",
+      "unit": "enum",
+      "scope": "unit",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [
+        "combined",
+        "separate"
+      ],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL bathroom-unit accepts совмещенный or раздельный, alternatively a numeric value",
+      "unknown_policy": "unknown for omitted or numeric-only values",
+      "refresh": "per offer snapshot"
+    },
+    {
+      "key": "unit.floor",
+      "label_ru": "Этаж",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "floor",
+      "scope": "unit",
+      "operators": [
+        "min",
+        "max",
+        "equals"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "evidence": "YRL floor and bnMAP floor identify the floor of the offered lot",
+      "unknown_policy": "unknown if missing or invalid; do not infer from apartment number or building floors",
+      "refresh": "per offer snapshot"
+    },
+    {
+      "key": "unit.renovation",
+      "label_ru": "Отделка",
+      "group": "property",
+      "type": "string|null",
+      "value_type": "string",
+      "unit": "source vocabulary",
+      "scope": "unit_or_building",
+      "operators": [
+        "equals",
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "source_dependent",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "evidence": "YRL renovation tag has documented finish options; bnMAP interior is documented as finishing type at the building where the lot is located, while decoration fields may be lot-level",
+      "unknown_policy": "unknown when omitted; do not map free text without a reviewed vocabulary; preserve source value and scope",
+      "refresh": "per source revision"
+    },
+    {
+      "key": "unit.rooms",
+      "label_ru": "Комнаты",
+      "group": "property",
+      "type": "integer|null",
+      "value_type": "integer",
+      "unit": "room",
+      "scope": "unit",
+      "operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "evidence": "YRL rooms is total room count but is not used for studios; bnMAP rooms is count; ЕИСЖС general official API note mentions premises rooms with exact schema gated",
+      "unknown_policy": "unknown for missing/studio unless source explicitly reports studio separately; never coerce missing studio count to zero",
+      "refresh": "per source revision/offer snapshot"
+    },
+    {
+      "key": "unit.stove_type",
+      "label_ru": "Тип плиты",
+      "group": "property",
+      "type": "gas|electric|null",
+      "value_type": "enum",
+      "unit": "enum",
+      "scope": "unit_or_building",
+      "operators": [
+        "equals"
+      ],
+      "enum_values": [
+        "gas",
+        "electric"
+      ],
+      "availability": "blocked",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [],
+      "evidence": "No reviewed YRL or bnMAP price-list field describes the installed stove type",
+      "unknown_policy": "unknown unless an authorized structured source explicitly reports type; do not infer from utility/gas connection",
+      "refresh": "on source revision"
+    },
+    {
+      "key": "unit.window_view",
+      "label_ru": "Вид из окна",
+      "group": "property",
+      "type": "string|null",
+      "value_type": "string",
+      "unit": "source vocabulary",
+      "scope": "unit",
+      "operators": [
+        "equals",
+        "contains"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "none",
+      "coverage_note": null,
+      "source_ids": [
+        "yandex_newbuild_yrl"
+      ],
+      "evidence": "YRL window-view values include courtyard, street, or both",
+      "unknown_policy": "unknown if absent; do not infer from map orientation",
+      "refresh": "per offer snapshot"
+    },
+    {
+      "key": "walk_time_bus_stop_s",
+      "label_ru": "Пешком до остановки автобуса",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to waiting platform/stop point; nearest routed bus stop inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_clinic_s",
+      "label_ru": "Пешком до клиники",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to clinic public access point; nearest routed clinic inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; no clinic in sample does not prove absence",
+      "refresh": "with POI extract and route provider schedule; persist only under approved route license"
+    },
+    {
+      "key": "walk_time_kindergarten_s",
+      "label_ru": "Пешком до детского сада",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to kindergarten public access point; nearest routed kindergarten inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; no sample match does not prove absence",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_metro_s",
+      "label_ru": "Пешком до входа в метро",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to a mapped public metro entrance, selected by pedestrian route",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null when only station center/name is known, no route exists, or entrance coverage is incomplete",
+      "refresh": "with entrance geometry and route graph; source license permits persistence"
+    },
+    {
+      "key": "walk_time_park_s",
+      "label_ru": "Пешком до парка",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to park public access point; nearest routed park inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; playground or green polygon is not automatically a park",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_pharmacy_s",
+      "label_ru": "Пешком до аптеки",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to pharmacy public access point; nearest routed pharmacy inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_school_s",
+      "label_ru": "Пешком до школы",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to school public access point; nearest routed school inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; college/university is not silently treated as a school",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_supermarket_s",
+      "label_ru": "Пешком до супермаркета",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to supermarket public access point; nearest routed supermarket inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; convenience shop is not silently counted as a supermarket",
+      "refresh": "with POI extract and route provider schedule"
+    },
+    {
+      "key": "walk_time_tram_stop_s",
+      "label_ru": "Пешком до остановки трамвая",
+      "group": "social",
+      "type": "number|null",
+      "value_type": "decimal",
+      "unit": "s",
+      "scope": "complex entrance to tram platform/stop point; nearest routed tram stop inside declared source scope",
+      "operators": [
+        "min",
+        "max"
+      ],
+      "enum_values": [],
+      "availability": "conditional",
+      "filterable": true,
+      "coverage_requirement": "complete",
+      "coverage_note": null,
+      "source_ids": [
+        "osm",
+        "router_yandex",
+        "router_2gis"
+      ],
+      "evidence": [
+        "osm",
+        "router_yandex",
+        "router_2gis",
+        "osm_tag_wiki"
+      ],
+      "unknown_policy": "null if no eligible route or coverage is incomplete; stop proximity is not a transit itinerary",
+      "refresh": "with POI extract and route provider schedule"
+    }
+  ]
+}

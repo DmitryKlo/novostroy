@@ -1,0 +1,73 @@
+name: novostroy
+
+services:
+  api:
+    image: registry.spirit.culab.ru/hack-l2sh-2/novostroy-api:${NOVOSTROY_IMAGE_TAG:?Set the full source commit SHA}
+    init: true
+    restart: unless-stopped
+    environment:
+      NOVOSTROY_DATA_MODE: real
+      NOVOSTROY_REAL_STORE: empty
+      NOVOSTROY_REGISTRY_MODE: estateline
+      NOVOSTROY_EXPOSE_SOURCES: "0"
+      NOVOSTROY_GEODATA_PYTHON: /usr/local/bin/python
+      NOVOSTROY_VALHALLA_TILE_DIR: /app/data/social/valhalla_moscow/tiles
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - type: bind
+        source: ${NOVOSTROY_RELEASE_DIR:?Set an absolute validated data release path}/data
+        target: /app/data
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${NOVOSTROY_RELEASE_DIR:?Set an absolute validated data release path}/assets
+        target: /app/assets
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: runtime
+        target: /app/data/runtime
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          h=json.load(urllib.request.urlopen('http://127.0.0.1:8000/v1/health',timeout=5));
+          assert h.get('data_mode')=='real' and h.get('catalog_view')=='developer_buildings' and h.get('status')=='developer_buildings_ready' and str(h.get('map_run_id','')).startswith('developer-map-v1-')
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  web:
+    image: registry.spirit.culab.ru/hack-l2sh-2/novostroy-web:${NOVOSTROY_IMAGE_TAG:?Set the full source commit SHA}
+    init: true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${NOVOSTROY_BIND_ADDR:-127.0.0.1}:${NOVOSTROY_HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  runtime:

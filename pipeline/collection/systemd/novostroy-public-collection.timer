@@ -1,0 +1,10 @@
+[Unit]
+Description=Monthly reviewed public registry collection
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+Unit=novostroy-public-collection.service
+
+[Install]
+WantedBy=timers.target

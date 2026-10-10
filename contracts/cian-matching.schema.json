@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novostroy.local/contracts/cian-matching.schema.json",
+  "title": "Private offline CIAN-to-map review run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rules_version", "implementation_sha256", "run_id", "input_sha256", "source_lineage", "observations_total", "local_points_checked", "review_rows_total", "decision_counts", "accepted_crosswalks", "live_cian_fetches", "production_changes", "publication_status", "review_authority", "files"],
+  "properties": {
+    "schema_version": {"const": "cian-map-matching-review/1"},
+    "rules_version": {"pattern": "^cian-map-review/[0-9]+$"},
+    "implementation_sha256": {"$ref": "#/$defs/sha"},
+    "run_id": {"pattern": "^cian-match-[a-f0-9]{16}$"},
+    "input_sha256": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observations", "local_objects"],
+      "properties": {"observations": {"$ref": "#/$defs/sha"}, "local_objects": {"$ref": "#/$defs/sha"}}
+    },
+    "source_lineage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["osm_audit_sha256", "model_manifest_sha256", "model_run_id"],
+      "properties": {"osm_audit_sha256": {"$ref": "#/$defs/sha"}, "model_manifest_sha256": {"$ref": "#/$defs/sha"}, "model_run_id": {"pattern": "^models-v1-[a-f0-9]{16}$"}}
+    },
+    "observations_total": {"type": "integer", "minimum": 1, "maximum": 100},
+    "local_points_checked": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "review_rows_total": {"type": "integer", "minimum": 1, "maximum": 5000},
+    "decision_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["review", "manual", "rejected"],
+      "properties": {"review": {"type": "integer", "minimum": 0}, "manual": {"type": "integer", "minimum": 0}, "rejected": {"type": "integer", "minimum": 0}}
+    },
+    "accepted_crosswalks": {"const": 0},
+    "live_cian_fetches": {"const": 0},
+    "production_changes": {"const": 0},
+    "publication_status": {"const": "private_review_only"},
+    "review_authority": {"const": "agent_assisted_not_user_verified"},
+    "files": {
+      "type": "object", "additionalProperties": false,
+      "required": ["review.jsonl", "review.csv", "review.html"],
+      "properties": {
+        "review.jsonl": {"$ref": "#/$defs/file"},
+        "review.csv": {"$ref": "#/$defs/file"},
+        "review.html": {"$ref": "#/$defs/file"}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha"}, "bytes": {"type": "integer", "minimum": 0}}
+    },
+    "review_row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observation_id", "cian_source_url", "cian_observed_at", "cian_source_updated_at", "cian_access_method", "cian_page_scope", "cian_project_name", "cian_address", "source_claimed_use", "unmatched_source_page_use", "agent_review_annotation", "review_authority", "map_point_id", "candidate_id", "local_source_record_id", "local_osm_url", "local_osm_address", "local_source_updated_at", "local_geometry_sha256", "decision", "reason_code", "evidence_strength", "accepted_crosswalk", "coordinates_changed"],
+      "properties": {
+        "observation_id": {"type": "string", "minLength": 1},
+        "cian_source_url": {"type": "string", "pattern": "^https://([a-z0-9-]+\\.)*cian\\.ru/"},
+        "cian_observed_at": {"type": "string", "format": "date-time"},
+        "cian_source_updated_at": {"type": ["string", "null"]},
+        "cian_access_method": {"enum": ["direct_rendered_page", "search_index", "prior_viewer_capture"]},
+        "cian_page_scope": {"enum": ["project", "building", "corpus"]},
+        "cian_project_name": {"type": ["string", "null"]},
+        "cian_address": {"type": "object"},
+        "source_claimed_use": {"enum": ["residential_project", "commercial_building", "unknown"]},
+        "unmatched_source_page_use": {"type": ["string", "null"]},
+        "agent_review_annotation": {"type": "string", "minLength": 1},
+        "review_authority": {"const": "agent_assisted_not_user_verified"},
+        "map_point_id": {"type": ["string", "null"], "pattern": "^mappt_[a-f0-9]{24}$"},
+        "candidate_id": {"type": ["string", "null"], "pattern": "^cand_[a-f0-9]{24}$"},
+        "local_source_record_id": {"type": ["string", "null"]},
+        "local_osm_url": {"type": ["string", "null"], "pattern": "^https://www\\.openstreetmap\\.org/(way|relation)/[1-9][0-9]*$"},
+        "local_osm_address": {"type": ["object", "null"]},
+        "local_source_updated_at": {"type": ["string", "null"]},
+        "local_geometry_sha256": {"type": ["string", "null"]},
+        "decision": {"enum": ["review", "manual", "rejected"]},
+        "reason_code": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "evidence_strength": {"enum": ["address_agreement_only", "incomplete_address", "ambiguous", "insufficient", "conflict"]},
+        "accepted_crosswalk": {"const": false},
+        "coordinates_changed": {"const": false}
+      }
+    }
+  }
+}

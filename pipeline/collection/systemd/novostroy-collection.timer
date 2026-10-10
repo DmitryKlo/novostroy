@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Novostroy local source collection hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=15m
+Persistent=true
+Unit=novostroy-collection.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,780 @@
+{
+  "schema_version": "novostroy-rubric-evidence/1",
+  "rubric_source": {
+    "file": "/home/pirojban/Загрузки/Telegram Desktop/Витрина_новостроек_Кейс_Л2Ш_для_участников.pdf",
+    "pages": 2,
+    "criteria_count": 19,
+    "max_points": 57,
+    "scale": "0 not done; 1 partial; 2 done; 3 done plus above expectations",
+    "assessment_status": "No jury scores assigned; this file maps current evidence, gaps, and tests only."
+  },
+  "criteria": [
+    {
+      "key": "tech.map_stability",
+      "block": "development",
+      "label_ru": "Работоспособность карты",
+      "rubric_page": 1,
+      "expectation": "Map displays objects and does not crash or freeze during the demo.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "The production preview renders all seven 3D Tiles descriptors in desktop and iPhone-13-sized Chromium emulation. The full browser suite passed 22/22 on citywide-v3 and separately 22/22 on live public citywide-v5 after versioned-root assertion maintenance; the application bundle was unchanged. The earlier seven-layer deep-zoom cache issue was corrected.",
+          "paths": [
+            "reports/validation.md",
+            "web/tests/catalog.spec.ts",
+            "web/tests/layers.spec.ts",
+            "web/artifacts/final-mobile-map-v3.png",
+            "web/artifacts/final-browser-metrics-v3.json",
+            "web/artifacts/final-v5-summary.json"
+          ]
+        },
+        {
+          "claim": "A separate post-v5 visual smoke passed 4/4 desktop/mobile-emulation views of a known and a newly selected five-part parent. The new parent's exact public-v5 detail GLB loaded with 7/7 layers, adjusted SSE 24, and no page, console, or HTTP errors. Physical iPhone hardware was not used.",
+          "paths": [
+            "web/artifacts/final-v5-browser-smoke.json",
+            "web/artifacts/final-v5-new-five-part-parent-desktop.png",
+            "web/artifacts/final-v5-new-five-part-parent-mobile.png",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "Web/iOS Safari physical device and Unity native builds have not been run.",
+          "paths": [
+            "reports/validation.md",
+            "mobile/README.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No sustained pan/zoom/session stability test on a physical iPhone or Android device.",
+        "Large city tile completeness is not equivalent to smooth device rendering."
+      ],
+      "concrete_extra_for_3": "Add repeatable multi-minute navigation and filter-refresh tests on real target devices, with no crashes, broken selections, or stale map state; report frame-time and memory budgets.",
+      "evidence_test": [
+        "Run web E2E on desktop/mobile viewport and assert Cesium tiles, filtering, zero-result recovery, and no page errors.",
+        "On physical iPhone and Android, repeat pan/zoom/select/filter cycles and record crash-free result, frame-time, memory, and network errors."
+      ]
+    },
+    {
+      "key": "tech.architecture",
+      "block": "development",
+      "label_ru": "Архитектура и структура кода",
+      "rubric_page": 1,
+      "expectation": "Code is split into logical data, backend, and frontend modules.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Repository separates contracts, backend, recommendations, web, Unity mobile, source adapters, pipeline, quality, and integration checks.",
+          "paths": [
+            "README.md",
+            "contracts/",
+            "backend/",
+            "web/",
+            "mobile/UnityProject/",
+            "sources/",
+            "pipeline/"
+          ]
+        },
+        {
+          "claim": "Shared API and tiles are checked across layers by acceptance and live-contract scripts.",
+          "paths": [
+            "integration/run_acceptance.py",
+            "integration/check_live.py",
+            "contracts/openapi.json"
+          ]
+        },
+        {
+          "claim": "A linked architecture map documents module ownership, demo/real data separation, public projection, shared tiles, and validation boundaries.",
+          "paths": [
+            "docs/architecture.md",
+            "README.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Generated-client contract drift is not yet checked automatically across backend, web, and Unity source.",
+        "Unity/Cesium project has not been compiled in its target Editor."
+      ],
+      "concrete_extra_for_3": "Automate versioned API/DTO compatibility checks across backend, web, and Unity, then validate the pinned Unity project in its target Editor.",
+      "evidence_test": [
+        "Run the contract checker and acceptance suite from a clean environment; verify each service/client references the same OpenAPI/schema version.",
+        "Open/import the Unity project with the pinned Editor and record package/scene validation."
+      ]
+    },
+    {
+      "key": "tech.real_data_filters",
+      "block": "development",
+      "label_ru": "Работа фильтров по реальным данным",
+      "rubric_page": 1,
+      "expectation": "Filters change map results and use real sourced data, not fabricated values.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Budget, district, room, area, status, and typed predicates are applied before ranking; map/search share the same eligibility policy.",
+          "paths": [
+            "recommendations/engine.py",
+            "integration/test_shared_eligibility.py",
+            "contracts/criteria_registry.json"
+          ]
+        },
+        {
+          "claim": "The runnable catalog is 100 fictional complexes and 1,000 illustrative offers; the real offer catalog is empty because no permitted live price feed exists.",
+          "paths": [
+            "README.md",
+            "reports/validation.md",
+            "docs/sources/property.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Filters work against demo offers, not real current apartment prices/availability.",
+        "This is the primary product-data blocker; real mode correctly returns zero offers rather than reusing demo stock."
+      ],
+      "concrete_extra_for_3": "Secure a documented permitted developer price feed, import dated current rows with source IDs, then demonstrate that each real filter changes matching offers and map markers while preserving unknowns.",
+      "evidence_test": [
+        "With a cleared real-feed fixture, test every filter against independently checked source rows and assert map/search/recommendation parity.",
+        "Without a cleared live source, verify real mode stays empty and never displays demo offers."
+      ]
+    },
+    {
+      "key": "tech.edge_and_errors",
+      "block": "development",
+      "label_ru": "Ошибки и крайние случаи",
+      "rubric_page": 1,
+      "expectation": "Zero matches, missing fields, and other errors are handled in the UI without developer-looking failures.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "The acceptance suite executes 100 cases; the full Chromium suite passes 22/22 on live v5 including empty/clarification states, typed-filter parity, Data-tab failure/retry, and API 500 recovery.",
+          "paths": [
+            "integration/run_acceptance.py",
+            "quality/acceptance_cases.json",
+            "web/tests/catalog.spec.ts",
+            "web/tests/criteria.spec.ts",
+            "web/tests/dashboard.spec.ts",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "Missing/stale/unknown fields remain unknown and unavailable offers are excluded.",
+          "paths": [
+            "sources/property/importer.py",
+            "recommendations/engine.py",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Physical-device network failure and malformed GLB recovery are not yet evidenced; the browser fault checks cover only selected API failures."
+      ],
+      "concrete_extra_for_3": "Add fault-injection cases for API timeout, malformed/partial tile response, corrupt source values, and retry recovery; keep all user-facing errors actionable and non-technical.",
+      "evidence_test": [
+        "Run E2E with API 500/timeout and failed GLB requests; assert a visible recovery state, no page exception, and successful retry.",
+        "Run acceptance suite and report the exact case count without counting overlapping tests twice."
+      ]
+    },
+    {
+      "key": "tech.performance",
+      "block": "development",
+      "label_ru": "Производительность",
+      "rubric_page": 1,
+      "expectation": "Map does not become slow at the intended displayed object volume.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "City, road, park, and water layers use streamed coarse/detail 3D Tiles. A fixed 128 MiB web cache was reweighted toward city detail after a seven-layer deep-zoom failure; the corrected mobile browser check selected 12 city detail tiles.",
+          "paths": [
+            "assets/citywide-v3/manifest.json",
+            "assets/roads-v1/manifest.json",
+            "assets/parks-v1/manifest.json",
+            "assets/water-v1/manifest.json",
+            "web/artifacts/final-browser-metrics-v3.json",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "Independent source-index audit found all 564,031 IDs represented and largest detail GLB 2,699,044 bytes / 21,444 triangles; this is not a device benchmark.",
+          "paths": [
+            "assets/citywide/manifest.json",
+            "assets/citywide/source_tile_index.jsonl",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "A fixed citywide-v3 Linux headless software-GL close-zoom trace transferred 35.28 MB desktop / 32.76 MB mobile emulation; rendered-frame interval P95 was 139.6 / 153.1 ms. This is a measurable browser load cost, not iPhone FPS or a v5 performance benchmark.",
+          "paths": [
+            "web/artifacts/final-browser-metrics-v3.json",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "A separate live-v5 Linux headless Chromium trace at the new five-part target (157 m camera height, eight zoom steps) transferred 19.32/19.91 MiB desktop/mobile emulation with rendered-frame-interval P95 85.6/64.0 ms. The v3 and v5 traces use different camera paths and are not a speedup comparison or physical-iPhone FPS.",
+          "paths": [
+            "web/artifacts/final-v5-summary.json",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No frame-time/RSS benchmark on a physical phone across citywide traversal.",
+        "The close-zoom headless transfer and frame intervals are costly; browser emulation does not establish acceptable device/network performance."
+      ],
+      "concrete_extra_for_3": "Publish a reproducible device matrix with cold/warm load, p50/p95 frame time, peak memory, transfer bytes, and tile failure rates for selected dense and sparse areas.",
+      "evidence_test": [
+        "Automate a fixed camera-route benchmark over coarse and detail cells and validate resource ceilings.",
+        "Repeat route on physical iPhone and Android under a documented network profile."
+      ]
+    },
+    {
+      "key": "tech.reproducible_deployment",
+      "block": "development",
+      "label_ru": "Воспроизводимость и развёртывание",
+      "rubric_page": 1,
+      "expectation": "Another computer can install and run the project from instructions with requirements, dependencies, settings, and a reproducible deployment path.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "README documents runtime prerequisites and commands for demo generation, web/API start, and checks; npm lockfile is present.",
+          "paths": [
+            "README.md",
+            "requirements-dev.txt",
+            "web/package-lock.json",
+            "scripts/dev.py"
+          ]
+        },
+        {
+          "claim": "A project-owned clean Python environment ran 67 backend/collection/recommendation/integration tests and 69 source-adapter tests without skips; the managed LAN production preview and API-only restart were checked. The documented citywide-v3 to citywide-v5 to sanitized-public build order preserves published source and audit artifacts.",
+          "paths": [
+            "reports/validation.md",
+            "requirements-dev.txt",
+            "scripts/dev.py"
+          ]
+        }
+      ],
+      "gap": [
+        "No Docker Compose/container deployment package is evidenced.",
+        "Large city GeoParquet/GLBs and Unity Editor/platform modules are external prerequisites, not shipped artifacts."
+      ],
+      "concrete_extra_for_3": "Provide a clean-machine bootstrap or Docker Compose profile for API/web, a data-artifact manifest and preflight check, and an optional Unity build checklist with pinned Editor/modules.",
+      "evidence_test": [
+        "Build and launch from a fresh checkout with only documented prerequisites; validate health, map tiles, and search.",
+        "Test declared failure messages when large data or Unity platform modules are absent."
+      ]
+    },
+    {
+      "key": "data.source_coverage",
+      "block": "data_and_analytics",
+      "label_ru": "Полнота источников",
+      "rubric_page": 2,
+      "expectation": "At least two real open data sources are used; no fabricated or hard-coded source records.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Real Overture building footprints and OSM POIs/boundary are retained with snapshots, hashes, IDs, and bounded coverage notes.",
+          "paths": [
+            "docs/sources/city.md",
+            "docs/sources/social.md",
+            "data/city/overture_moscow_cityclipped_2026-09-23.1.manifest.json",
+            "data/social/poi_manifest.json"
+          ]
+        },
+        {
+          "claim": "New district candidate layer is pinned to Overture Divisions release 2026-09-23.1; playground environmental pilot reuses real OSM records.",
+          "paths": [
+            "docs/sources/city-environment.md",
+            "docs/criteria/environment.json"
+          ]
+        },
+        {
+          "claim": "A pinned Geofabrik/OSM city clip yielded roads, parks, water, and 50,330 social POI-category records; separate official Minstroy permits and Moscow OSM construction candidates are registry/status data, not offers.",
+          "paths": [
+            "docs/briefs/social.md",
+            "data/property/minstroy/source_manifest.json",
+            "data/property/osm_construction/source_manifest.json",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "The OSM/Overture part source has 29,714 parts linked to 6,263 city parents; only 166 parents and 800 exact-version, geometry-gated parts are in the current stepped render. A separate offline pedestrian graph passed seven POI-access-point route smokes but cannot populate complex-origin walking-time facts yet.",
+          "paths": [
+            "docs/briefs/city-height-parts.md",
+            "data/city/osm_overture_clean_multilevel_parts_full_261009.manifest.json",
+            "data/social/valhalla_moscow/build_manifest.json",
+            "data/social/valhalla_moscow/route_smoke_validation.json"
+          ]
+        }
+      ],
+      "gap": [
+        "Current apartment offer prices and live availability are absent; demo catalog remains illustrative despite several real geospatial/registry sources.",
+        "OSM feature completeness is unknown, and records from overlapping OSM-derived sources cannot be counted as independent observations of the same product fact."
+      ],
+      "concrete_extra_for_3": "Connect multiple rights-cleared feeds across distinct product facts, publish per-field coverage and freshness, and reconcile stable project/building IDs without treating map context as inventory.",
+      "evidence_test": [
+        "For each displayed fact, trace source record ID, snapshot, date, license, and normalizer in an exportable source audit.",
+        "Run source-specific coverage checks and ensure no sample/demo record is counted as real inventory."
+      ]
+    },
+    {
+      "key": "data.legal_and_ethical_collection",
+      "block": "data_and_analytics",
+      "label_ru": "Легальность и этичность сбора",
+      "rubric_page": 2,
+      "expectation": "Team can explain source, license, terms, and compliant collection.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "OSM and Overture attribution/license obligations are recorded; source fields, hashes, query scope, and snapshot timestamps are preserved.",
+          "paths": [
+            "docs/sources/city.md",
+            "docs/sources/social.md",
+            "docs/sources/city-environment.md"
+          ]
+        },
+        {
+          "claim": "Production offer importer requires explicit cleared storage/display rights and rejects uncleared/test-only production rows.",
+          "paths": [
+            "sources/property/importer.py",
+            "sources/property/tests/test_importer.py"
+          ]
+        },
+        {
+          "claim": "Official Yandex/2GIS 3D renderer terms and Moscow model-submission access were reviewed; display access was not treated as a license to retain or repackage vendor building geometry. TUM GBA.LoD1 has a public Moscow tile but CC BY-NC 4.0 data terms and no inspected Moscow rows, so it is research-only for this commercial product. Open raster products are kept contextual, not claimed as individual building heights.",
+          "paths": [
+            "docs/sources/property.md",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "The current and previous compatible public tile releases redact source IDs in 15,280 GLBs while retaining mandatory map attribution. Active-root allowlisting denies raw internal tiles and manifests over HTTP; the independent auditor confirmed unchanged binary geometry.",
+          "paths": [
+            "integration/audit_public_assets.py",
+            "assets/public_release_audit.json",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No licensed current price source has been secured; public reference-data access is not treated as redistribution permission.",
+        "Final production legal review of ODbL-derived distributions and vendor display rights remains open."
+      ],
+      "concrete_extra_for_3": "Maintain a per-source rights dossier with permitted collection, storage, transformation, redistribution, attribution text, and approval evidence; block each dataset whose rights are not cleared.",
+      "evidence_test": [
+        "Run importer tests for cleared, uncleared, expired, and test-only rights contexts.",
+        "Audit each shipped data manifest and displayed attribution against its license and source terms."
+      ]
+    },
+    {
+      "key": "data.unified_schema",
+      "block": "data_and_analytics",
+      "label_ru": "Приведение к единой структуре",
+      "rubric_page": 2,
+      "expectation": "Records from different sources share normalized fields for price, dates, area, and related criteria.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Versioned OpenAPI/JSON schemas and a generated criteria registry define stable types, scopes, operators, and unknown policies.",
+          "paths": [
+            "contracts/IMPLEMENTATION-1.1.md",
+            "contracts/criteria_registry.json",
+            "contracts/openapi.json",
+            "contracts/schemas.json"
+          ]
+        },
+        {
+          "claim": "Source adapters preserve lossless source fields and field-level provenance; offers and units have separate IDs.",
+          "paths": [
+            "sources/property/adapters.py",
+            "sources/property/importer.py",
+            "docs/briefs/property.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No permitted live price feed has exercised full multi-source normalization in production mode.",
+        "Some environmental source schemas remain inaccessible or unknown."
+      ],
+      "concrete_extra_for_3": "Add a versioned cross-source mapping registry and replayable migration/contract tests for price basis, time precision, units, IDs, and provenance across two real permitted feeds.",
+      "evidence_test": [
+        "Validate adapter output against the shared schema and compare equivalent source rows for consistent normalized values.",
+        "Run backward-compatibility checks for existing API/mobile/web consumers."
+      ]
+    },
+    {
+      "key": "data.quality_and_cleanup",
+      "block": "data_and_analytics",
+      "label_ru": "Качество и очистка данных",
+      "rubric_page": 2,
+      "expectation": "Duplicates, missing values, and clear outliers are handled explicitly.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "City footprint processing validates geometry/IDs and clips against a pinned OSM mask; missing heights/floors are counted and kept distinct from render fallbacks.",
+          "paths": [
+            "sources/city/clip_city_geoparquet.py",
+            "docs/sources/city.md",
+            "data/city/overture_moscow_cityclipped_2026-09-23.1.manifest.json"
+          ]
+        },
+        {
+          "claim": "Offer adapters reject duplicate source IDs, invalid units/ranges, stale/uncleared records, and non-positive price inputs; null facts remain explicit.",
+          "paths": [
+            "sources/property/adapters.py",
+            "sources/property/importer.py",
+            "sources/property/tests/test_adapters.py",
+            "sources/property/tests/test_importer.py"
+          ]
+        },
+        {
+          "claim": "A conservative render-height overlay changed only 59 of 440,304 previously fallback buildings; a disjoint holdout matched 52/862 and reports error only on those matches.",
+          "paths": [
+            "data/city/overture_moscow_render_height_imputation_v1_1.manifest.json",
+            "assets/citywide-v3/manifest.json",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "The current stepped renderer admitted 166 of 6,263 source-linked parent groups and 800 of 29,714 parts after exact OSM ID/version, positive height, parent coverage and bounded 3D-overlap checks. For those exact-version OSM rows height is ground-to-top, min_height is the lower Z, and roof:height is already inside total height; parent height/floor facts are unchanged. Excluded groups remain source data and are not all called invalid.",
+          "paths": [
+            "docs/briefs/city-height-parts.md",
+            "data/city/osm_overture_clean_multilevel_parts_full_261009.manifest.json",
+            "assets/citywide-v5/manifest.json",
+            "backend/tests/test_parts_geometry.py"
+          ]
+        }
+      ],
+      "gap": [
+        "No live price rows exist for market outlier review or source-to-source duplicate reconciliation.",
+        "Source height coverage remains sparse; the estimated render-height overlay is not measured building data and city completeness is not proven."
+      ],
+      "concrete_extra_for_3": "Produce a per-ingest quarantine report for duplicates, invalid units, missingness, stale rows, and robustly flagged price outliers with source context and human review before publication.",
+      "evidence_test": [
+        "Run duplicate/missing/outlier fixtures and verify rejected rows are counted with reasons while valid records remain reproducible.",
+        "Re-run city source-ID/geometry audit after any source update."
+      ]
+    },
+    {
+      "key": "data.persona_metric_fit",
+      "block": "data_and_analytics",
+      "label_ru": "Корректность метрик для пользователя",
+      "rubric_page": 2,
+      "expectation": "Metrics respond to the target user's actual needs, rather than being included merely because a source contains them.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Business brief identifies the buyer's hard constraints and maps budget, area, rooms, district, and offer freshness to the search flow.",
+          "paths": [
+            "docs/business-analysis.md",
+            "docs/briefs/property.md",
+            "contracts/criteria_registry.json"
+          ]
+        },
+        {
+          "claim": "Environmental matrix separates measured noise from road/airport proximity and refuses to invent district air ranks.",
+          "paths": [
+            "docs/criteria/environment.json",
+            "docs/sources/city-environment.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Persona and priority assumptions have not been validated with target buyers.",
+        "Some desired criteria are unknown because no source currently reports them."
+      ],
+      "concrete_extra_for_3": "Run task-based research with target buyers, map each high-priority question to a source-backed field and unknown policy, and remove or defer metrics that do not affect decisions.",
+      "evidence_test": [
+        "Give users fixed purchase scenarios and record which fields change shortlist decisions; compare against the chosen filter set.",
+        "Audit every recommendation input to confirm source, scope, freshness, and coverage are visible."
+      ]
+    },
+    {
+      "key": "data.contextual_analysis",
+      "block": "data_and_analytics",
+      "label_ru": "Аналитический вывод и контекст",
+      "rubric_page": 2,
+      "expectation": "Explain what numbers mean, including context for differences such as district price premiums.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "City-data and business reports explain footprint/height coverage, render fallbacks, source limits, and why proximity/unknown counts are not quality scores.",
+          "paths": [
+            "docs/sources/city.md",
+            "docs/business-analysis.md",
+            "docs/sources/city-environment.md"
+          ]
+        },
+        {
+          "claim": "No current real offer prices are available to calculate district price premiums or market comparisons.",
+          "paths": [
+            "docs/sources/property.md",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "The user chose source-backed numerical district facts as the product direction; current environmental matrix keeps unsupported district air ratings unknown.",
+          "paths": [
+            "docs/criteria/environment.json",
+            "docs/rubric/gaps.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No verified price context can explain district-level market differences; demo prices must not support such claims.",
+        "Environmental district facts and current air rating remain unavailable/unknown."
+      ],
+      "concrete_extra_for_3": "Once real prices and complete boundary/source coverage exist, publish date-qualified district comparisons with sample sizes, definitions, confounders, and uncertainty; suppress unsupported conclusions.",
+      "evidence_test": [
+        "Recompute a district comparison from an independently audited real snapshot and verify denominators, price basis, period, and boundary version.",
+        "Check narrative claims against source queries and suppress results below agreed coverage/sample thresholds."
+      ]
+    },
+    {
+      "key": "data.in_product_dashboard",
+      "block": "data_and_analytics",
+      "label_ru": "Аналитический отчёт и дешборд",
+      "rubric_page": 2,
+      "expectation": "Implement a dashboard with requested metrics/reports and plausible data.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Backend provides privacy-limited event metrics; documentation defines counts and timing with a minimum sample threshold.",
+          "paths": [
+            "analytics/store.py",
+            "backend/app.py",
+            "docs/analytics.md"
+          ]
+        },
+        {
+          "claim": "The approved in-product Data tab uses /v1/data-coverage and separates demo offers, current real offers, and city geometry; 55 offer-field coverage rows, quality partitions, and bounded offer-only price/area distributions are checked against source counts.",
+          "paths": [
+            "web/src/DataDashboard.tsx",
+            "backend/coverage.py",
+            "contracts/DATA-COVERAGE.md",
+            "integration/check_live.py",
+            "reports/validation.md",
+            "web/artifacts/final-desktop-data-v3.png",
+            "web/artifacts/final-mobile-data-v3.png",
+            "web/tests/dashboard.spec.ts"
+          ]
+        }
+      ],
+      "gap": [
+        "No real-user cohort exists; current /v1/metrics includes QA/demo traffic and is not a user funnel or business conversion report.",
+        "No current licensed price feed exists for market distributions or district-price conclusions; demo charts remain explicitly illustrative."
+      ],
+      "concrete_extra_for_3": "Add a privacy-safe internal usage dashboard only after real-user/QA separation and sufficient samples; pair it with a rights-cleared offer feed for real-market charts while keeping dataset/quality labels.",
+      "evidence_test": [
+        "Compare each Data tab count, 55-field partition, and offer-only chart denominator with /v1/data-coverage and its frozen schema; verify real0 stays empty.",
+        "Verify QA exclusion, privacy rules, minimum timing sample thresholds, and no sale/conversion claim from automated UI events."
+      ]
+    },
+    {
+      "key": "data.recommendation_sense",
+      "block": "data_and_analytics",
+      "label_ru": "Осмысленность рекомендаций",
+      "rubric_page": 2,
+      "expectation": "Rule or AI recommender ranking is understandable and meaningful; ML accuracy itself is not the criterion.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Rules apply hard filters before ranking and expose explanation reasons; unknown or insufficient social coverage does not create a positive score.",
+          "paths": [
+            "recommendations/engine.py",
+            "recommendations/social_metrics.py",
+            "recommendations/test_engine.py"
+          ]
+        },
+        {
+          "claim": "Acceptance and tests include conditional-price, unknown-coverage, district, and unavailable-offer cases.",
+          "paths": [
+            "quality/acceptance_cases.json",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Ranking has not been checked against target-buyer preferences or choices.",
+        "Real offer inventory is absent, so output examples are illustrative."
+      ],
+      "concrete_extra_for_3": "Add a transparent reason breakdown, run blind buyer comparisons against unranked shortlists, and document whether recommendations improve relevant choice without violating hard constraints.",
+      "evidence_test": [
+        "Property-test that all hard-filter failures are excluded and unknown criteria never increase score.",
+        "Run a small pre-registered buyer ranking task and report agreement, disagreements, and reasons without claiming ML accuracy."
+      ]
+    },
+    {
+      "key": "ux.one_minute_understanding",
+      "block": "ux_ui",
+      "label_ru": "Понятность интерфейса без объяснений",
+      "rubric_page": 2,
+      "expectation": "A person outside the team understands what to do within one minute.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "First screen labels the demo, presents search/filter controls, map/list views, counts, and empty/loading/error states.",
+          "paths": [
+            "web/src/App.tsx",
+            "web/tests/catalog.spec.ts",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No timed unmoderated usability test with people outside the team is recorded."
+      ],
+      "concrete_extra_for_3": "Run a first-use task with representative buyers, measure task completion and time-to-first-relevant result, and iterate based on observed confusion rather than internal preference.",
+      "evidence_test": [
+        "Ask a participant with no briefing to find a new-build apartment under a stated budget and explain the result source; record completion under 60 seconds and errors."
+      ]
+    },
+    {
+      "key": "ux.filter_grouping",
+      "block": "ux_ui",
+      "label_ru": "Логичность расположения фильтров",
+      "rubric_page": 2,
+      "expectation": "Filters are grouped by meaning and important filters remain visible.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Primary budget/room/area/district controls are separate from expandable advanced filters; advanced filters group property, social, and environment fields.",
+          "paths": [
+            "web/src/App.tsx",
+            "web/src/AdvancedFilters.tsx"
+          ]
+        },
+        {
+          "claim": "Available controls respect the registry's `filterable` and supported operators.",
+          "paths": [
+            "web/src/AdvancedFilters.tsx",
+            "contracts/criteria_registry.json"
+          ]
+        }
+      ],
+      "gap": [
+        "Priority and grouping have not been validated by a target-user test; unavailable criteria may change as sources arrive."
+      ],
+      "concrete_extra_for_3": "Validate labels/order with target buyers and show each filter's availability/coverage without hiding the most common constraints.",
+      "evidence_test": [
+        "Observe users choosing a budget, rooms, district, and one optional criterion; record misclicks, time, and whether they understand strict/unknown behavior."
+      ]
+    },
+    {
+      "key": "ux.card_readability",
+      "block": "ux_ui",
+      "label_ru": "Читаемость карточки ЖК",
+      "rubric_page": 2,
+      "expectation": "A project card/map detail is not overloaded and information is prioritized.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "Cards expose project/district, price, area/rooms, source quality, and date. The default public API projection hides provider identity; integration checks inspect search, map, detail, recommendation, comparison, and registry responses.",
+          "paths": [
+            "web/src/App.tsx",
+            "web/src/FactView.tsx",
+            "backend/public.py",
+            "integration/check_live.py"
+          ]
+        },
+        {
+          "claim": "Procedural facades and demo prices are labeled as illustrative; real facade models are not claimed.",
+          "paths": [
+            "README.md",
+            "reports/validation.md"
+          ]
+        }
+      ],
+      "gap": [
+        "Card hierarchy has no external comprehension/readability study and uses demo content in the current runnable catalog.",
+        "Physical-device readability and understanding of conditional versus asking price have not been validated with target buyers."
+      ],
+      "concrete_extra_for_3": "Validate a compact card with target buyers and progressive disclosure for source, price basis, and unknown facts; use real licensed project data before claiming the listing experience is complete.",
+      "evidence_test": [
+        "Ask participants to identify total price, price conditions, area, source date, and unknown availability from a card within a short timed task.",
+        "Inspect all public routes and cards for provider names/identifiers; verify status, date, units, price basis, and mandatory map attribution remain visible."
+      ]
+    },
+    {
+      "key": "ux.response_feedback",
+      "block": "ux_ui",
+      "label_ru": "Отклик интерфейса и счётчик",
+      "rubric_page": 2,
+      "expectation": "Users can see that a filter applied through a result count and map/list update.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "List count distinguishes displayed rows from full matches; map markers and search use the same eligibility snapshot, verified by live contract check.",
+          "paths": [
+            "web/src/App.tsx",
+            "backend/app.py",
+            "integration/check_live.py",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "Loading, empty, error, clarification, and retry states are explicit.",
+          "paths": [
+            "web/src/App.tsx",
+            "web/tests/catalog.spec.ts"
+          ]
+        }
+      ],
+      "gap": [
+        "No real-user perception test or low-bandwidth response-time evidence is recorded."
+      ],
+      "concrete_extra_for_3": "Add immediate applied-filter feedback with accessible status announcements and measured response budgets under slow network conditions.",
+      "evidence_test": [
+        "Apply a filter and assert count, cards, and markers change to the same result set; test delay/retry and assistive status announcements."
+      ]
+    },
+    {
+      "key": "ux.visual_cohesion",
+      "block": "ux_ui",
+      "label_ru": "Визуальная целостность",
+      "rubric_page": 2,
+      "expectation": "One visual style, readable fonts/colors, and a map that does not look assembled from unrelated designs.",
+      "jury_score": null,
+      "verified_evidence": [
+        {
+          "claim": "The light UI, darker citywide-v3 massing, visible roads, pastel-green parks, and pastel-blue water appear together in final desktop/mobile Chromium screenshots; seven-layer detail selection and no horizontal overflow were checked.",
+          "paths": [
+            "web/src/styles.css",
+            "assets/citywide-v3/manifest.json",
+            "assets/roads-v1/manifest.json",
+            "assets/parks-v1/manifest.json",
+            "assets/water-v1/manifest.json",
+            "web/artifacts/final-desktop-map-v3.png",
+            "web/artifacts/final-mobile-map-v3.png",
+            "reports/validation.md"
+          ]
+        },
+        {
+          "claim": "The separate v5 desktop/mobile screenshots show a new five-part stepped group with no full parent shell covering the wings; all seven layers remain visible and the browser smoke reported no overflow or errors.",
+          "paths": [
+            "web/artifacts/final-v5-new-five-part-parent-desktop.png",
+            "web/artifacts/final-v5-new-five-part-parent-mobile.png",
+            "web/artifacts/final-v5-browser-smoke.json"
+          ]
+        },
+        {
+          "claim": "User-approved visual direction: light baseline, darker buildings, visible roads, pastel-green parks, and pastel-blue water. Comparison UI work is deferred; no branded concept title is inferred.",
+          "paths": [
+            "docs/rubric/gaps.md"
+          ]
+        }
+      ],
+      "gap": [
+        "No physical-device visual/contrast review or external design/readability study is recorded.",
+        "The Unity source has matching layer descriptors and a weighted cache policy but has not been rendered in Unity Editor or on a native device."
+      ],
+      "concrete_extra_for_3": "Verify contrast and readability of the approved map/UI palette on physical iPhone and Android devices, import the Unity scene in the pinned Editor, and record an external design review; keep comparison controls deferred and public provider identities hidden.",
+      "evidence_test": [
+        "Run contrast and responsive checks on the approved screens and verify roads/building/park/water contrast at supported map zoom levels.",
+        "Have external reviewers identify the visual hierarchy and source status without prompting; inspect public screens for provider identity leakage."
+      ]
+    }
+  ],
+  "product_decisions_not_made": [
+    "Do not infer a branded concept title from the selected numerical district-facts direction.",
+    "Comparison UI work is deferred by user decision.",
+    "Do not infer jury scores from this evidence map."
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "purpose": "isolated local PostgreSQL/PostGIS development database",
+  "observed_at": "2026-10-09T12:37:44+03:00",
+  "runtime": {
+    "postgresql": "17.11",
+    "postgis": "3.6.0",
+    "postgis_full_version_excerpt": "POSTGIS=3.6.0 0297861; PGSQL=170; GEOS=3.14.0; PROJ=9.7.1; LIBXML=2.14.6; LIBJSON=0.18",
+    "environment": ".runtime/postgis-env",
+    "cluster": ".runtime/postgis-data",
+    "cluster_owner": "pirojban",
+    "database": "novostroy",
+    "bind_address": "127.0.0.1",
+    "port": 55439,
+    "unix_socket_directory": ".runtime/postgis-socket",
+    "auth_local": "peer",
+    "auth_host": "scram-sha-256",
+    "service_name": "novostroy",
+    "service_file": ".runtime/pg_service.conf",
+    "passfile": ".runtime/postgis.pgpass",
+    "passfile_mode": "0600",
+    "connection_uri_without_password": "postgresql://pirojban@127.0.0.1:55439/novostroy",
+    "backend_environment": {
+      "PGSERVICEFILE": "/home/pirojban/novostroy/.runtime/pg_service.conf",
+      "NOVOSTROY_PG_SERVICE": "novostroy"
+    }
+  },
+  "install": {
+    "channel": "conda-forge",
+    "resolved_packages": 73,
+    "planned_download_bytes": 81115637,
+    "command": "rtk proxy env CONDA_PKGS_DIRS=/home/pirojban/novostroy/.runtime/conda-pkgs /opt/anaconda/bin/conda create --yes --prefix /home/pirojban/novostroy/.runtime/postgis-env --override-channels --channel conda-forge postgresql=17.11 postgis=3.6.0"
+  },
+  "setup_commands": [
+    "rtk mkdir -p .runtime/postgis-data .runtime/postgis-socket",
+    "rtk proxy .runtime/postgis-env/bin/initdb -D /home/pirojban/novostroy/.runtime/postgis-data --username=pirojban --auth-local=peer --auth-host=scram-sha-256 --no-instructions",
+    "rtk proxy .runtime/postgis-env/bin/pg_ctl -D /home/pirojban/novostroy/.runtime/postgis-data -l /home/pirojban/novostroy/.runtime/postgis-server.log -o \"-c listen_addresses=127.0.0.1 -c port=55439 -c unix_socket_directories=/home/pirojban/novostroy/.runtime/postgis-socket\" start",
+    "rtk proxy python -m sources.property.devdb.bootstrap_auth"
+  ],
+  "sql_smoke": {
+    "commands": [
+      "rtk proxy env PGSERVICEFILE=\"$PWD/.runtime/pg_service.conf\" .runtime/postgis-env/bin/psql 'service=novostroy' -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION postgis;'",
+      "rtk proxy env PGSERVICEFILE=\"$PWD/.runtime/pg_service.conf\" .runtime/postgis-env/bin/psql 'service=novostroy' -v ON_ERROR_STOP=1 -f sources/property/devdb/smoke.sql"
+    ],
+    "result": "PASS: CREATE EXTENSION postgis; PostGIS_Full_Version() reports 3.6.0; synthetic temp Point(4326), bounding-box predicate, and EPSG:3857 transform assertions passed; transaction rolled back.",
+    "fixture_data": "one explicitly synthetic temporary coordinate; no persistent property rows"
+  },
+  "input_postgis_api_acceptance": {
+    "command": "rtk proxy env PGSERVICEFILE=\"$PWD/.runtime/pg_service.conf\" .runtime/property-test-env/bin/python -m sources.property.devdb.run_integration",
+    "test_python": "3.13; psycopg 3.3.6 in ignored .runtime/property-test-env; FastAPI/httpx from host system site packages",
+    "service": "property_test_luna_20261009_093729_672449",
+    "schema": "property_test_luna_20261009_093729_672449",
+    "records_parsed_by_developer_xml_adapter": 3,
+    "canonical_batch_records_imported_in_one_transaction": 3,
+    "synthetic_test_schema_rows_after_adversarial_cases": 5,
+    "test_schema_snapshot_rows": 1,
+    "regular_novostroy_service_seeded": false,
+    "api_results": {
+      "eligible_offer_count": 1,
+      "budget_max_20000000_count": 1,
+      "budget_max_1_count": 0,
+      "known_district_without_matching_offer_count": 0,
+      "unknown_district_status": 422,
+      "stale_uncleared_missing_price_offer_detail_status": 404
+    },
+    "gates": {
+      "demo_adapter_output": "rejected before import",
+      "uncleared_offer": "rejected before import; isolated adversarial DB row also excluded",
+      "stale_offer": "imported only to isolated schema; excluded by PostGIS freshness gate",
+      "unknown_price": "imported only as quality=unknown; an adversarial null-price row was also excluded by API",
+      "test_only_provenance": "source name is visibly synthetic; source manifest permitted_display=false; test rows are confined to property_test_* service/schema"
+    },
+    "retained_local_test_service_file": ".runtime/property_test_luna_20261009_093729_672449.pg_service.conf"
+  },
+  "secrets": "No credential value recorded. The generated password exists only in the ignored .runtime/postgis.pgpass file; no PGPASSWORD environment variable was used.",
+  "source_log": [
+    {
+      "url": "https://www.postgresql.org/docs/current/app-initdb.html",
+      "use": "cluster initialization ownership and safety"
+    },
+    {
+      "url": "https://www.postgresql.org/docs/current/runtime-config-connection.html",
+      "use": "loopback binding and configured server port"
+    },
+    {
+      "url": "https://www.postgresql.org/docs/current/libpq-pgservice.html",
+      "use": "service-file connection configuration"
+    },
+    {
+      "url": "https://www.postgresql.org/docs/current/libpq-envars.html",
+      "use": "PGSERVICEFILE/PGPASSFILE support and avoiding PGPASSWORD"
+    },
+    {
+      "url": "https://postgis.net/documentation/getting_started/",
+      "use": "PostGIS extension enablement"
+    }
+  ]
+}

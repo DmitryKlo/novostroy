@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novostroy.local/contracts/map_point_groups.schema.json",
+  "title": "Public-safe map point complex group projection",
+  "description": "A versioned projection of already validated source-owned complex memberships for map display. Source evidence remains in the backend/private provenance record. Empty groups are valid and mean all point identities remain independent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "visibility",
+    "registry_snapshot_id",
+    "model_run_id",
+    "groups"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "visibility": {
+      "const": "public"
+    },
+    "registry_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id",
+        "group_scope",
+        "identity_basis",
+        "group_label",
+        "point_ids"
+      ],
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "pattern": "^group_[a-f0-9]{24}$",
+          "description": "Opaque stable hash of validated source-owned or established crosswalk identity; never generated from a label, coordinate, or name similarity."
+        },
+        "group_scope": {
+          "const": "residential_complex"
+        },
+        "identity_basis": {
+          "enum": [
+            "source_complex_id",
+            "explicit_relation_membership",
+            "verified_crosswalk"
+          ]
+        },
+        "group_label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A source-backed public display label. A repeated addr:place or name by itself is not membership proof."
+        },
+        "point_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

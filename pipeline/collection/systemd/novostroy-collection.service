@@ -1,0 +1,13 @@
+[Unit]
+Description=Novostroy local source collection
+ConditionPathExists=/home/pirojban/novostroy/pipeline/collection/jobs.local.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pirojban/novostroy
+ExecStart=/home/pirojban/novostroy/.runtime/dev-env/bin/python -m pipeline.collection --config /home/pirojban/novostroy/pipeline/collection/jobs.local.json --apply --offline
+NoNewPrivileges=yes
+PrivateTmp=yes
+IPAddressDeny=any
+ProtectSystem=strict
+ReadWritePaths=/home/pirojban/novostroy/data/runtime/collection

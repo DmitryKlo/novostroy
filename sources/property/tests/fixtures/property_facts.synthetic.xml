@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC DEMO ONLY: all IDs, values, dates, and amenities are fabricated test data. -->
+<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06">
+  <generation-date>2026-10-09T09:00:00+03:00</generation-date>
+  <offer internal-id="SYNTHETIC-FACTS-OFFER-001">
+    <category>квартира</category>
+    <newbuilding-id>SYNTHETIC-FACTS-COMPLEX-001</newbuilding-id>
+    <building-id>SYNTHETIC-FACTS-BUILDING-001</building-id>
+    <price><value>10000000</value><currency>RUB</currency></price>
+    <area><value>40.5000000000000001</value><unit>кв. м</unit></area>
+    <floor>7</floor>
+    <rooms>1</rooms>
+    <renovation>чистовая</renovation>
+    <balcony>лоджия</balcony>
+    <bathroom-unit>2</bathroom-unit>
+    <ceiling-height>3.2</ceiling-height>
+    <window-view>во двор</window-view>
+    <lift>false</lift>
+    <guarded-building>нет</guarded-building>
+    <parking>0</parking>
+    <building-state>unfinished</building-state>
+    <built-year>2028</built-year>
+    <ready-quarter>4</ready-quarter>
+  </offer>
+</realty-feed>

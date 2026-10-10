@@ -1,0 +1,5032 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Counts": {
+      "type": "object",
+      "required": [
+        "districts",
+        "complexes",
+        "offers",
+        "city_buildings",
+        "facade_models"
+      ],
+      "properties": {
+        "districts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complexes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "city_buildings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "facade_models": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "District": {
+      "type": "object",
+      "required": [
+        "district_id",
+        "name",
+        "boundary_version"
+      ],
+      "properties": {
+        "district_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "geometry": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "Source": {
+      "type": "object",
+      "required": [
+        "quality",
+        "record_mode",
+        "observed_at"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quality": {
+          "enum": [
+            "illustrative",
+            "dated_asking",
+            "unknown"
+          ]
+        },
+        "record_mode": {
+          "enum": [
+            "demo",
+            "developer_offer",
+            "asking_price",
+            "registry_status",
+            "taxonomy_reference",
+            "reference_label"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "rights_status": {
+          "enum": [
+            "demo",
+            "cleared",
+            "restricted",
+            "unknown"
+          ]
+        },
+        "attribution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_record_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_fields": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "Price": {
+      "type": "object",
+      "required": [
+        "amount_rub",
+        "basis",
+        "observed_at"
+      ],
+      "properties": {
+        "amount_rub": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "basis": {
+          "enum": [
+            "asking_total",
+            "conditional_total"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "conditions": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OfferSource": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Source"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "record_mode": {
+              "enum": [
+                "demo",
+                "developer_offer",
+                "asking_price"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Coverage": {
+      "type": "object",
+      "required": [
+        "status",
+        "observed_categories",
+        "required_categories"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "illustrative"
+          ]
+        },
+        "observed_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "Recommendation": {
+      "type": "object",
+      "required": [
+        "score",
+        "explanation",
+        "coverage"
+      ],
+      "properties": {
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explanation": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Fact": {
+      "type": "object",
+      "required": [
+        "value",
+        "unit",
+        "status",
+        "scope",
+        "observed_at"
+      ],
+      "properties": {
+        "value": {},
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "observed",
+            "derived",
+            "estimated",
+            "illustrative",
+            "unknown",
+            "stale",
+            "conflict",
+            "not_applicable"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "coverage_status": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "source_bounded",
+            null
+          ]
+        },
+        "approximate": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provenance": {
+          "type": "object",
+          "required": [
+            "rights_status"
+          ],
+          "properties": {
+            "rights_status": {
+              "enum": [
+                "demo",
+                "cleared",
+                "restricted",
+                "unknown"
+              ]
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_record_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_field": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_updated_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "method": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "coverage_status": {
+              "enum": [
+                "complete",
+                "partial",
+                "unknown",
+                "source_bounded",
+                null
+              ]
+            },
+            "approximate": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "inputs": {},
+            "formula": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "unknown",
+                  "stale",
+                  "conflict",
+                  "not_applicable"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "Facts": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Fact"
+      }
+    },
+    "Predicate": {
+      "type": "object",
+      "required": [
+        "key",
+        "op",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "op": {
+          "enum": [
+            "min",
+            "max",
+            "equals",
+            "in",
+            "contains"
+          ]
+        },
+        "value": {}
+      },
+      "additionalProperties": false
+    },
+    "Criterion": {
+      "type": "object",
+      "required": [
+        "key",
+        "label_ru",
+        "group",
+        "type",
+        "value_type",
+        "unit",
+        "operators",
+        "enum_values",
+        "availability",
+        "filterable",
+        "coverage_requirement"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label_ru": {
+          "type": "string",
+          "minLength": 1
+        },
+        "group": {
+          "enum": [
+            "property",
+            "social",
+            "environment"
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "value_type": {
+          "enum": [
+            "integer",
+            "decimal",
+            "boolean",
+            "string",
+            "enum",
+            "string_array",
+            "object_array",
+            "object",
+            "ratio"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "operators": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "min",
+              "max",
+              "equals",
+              "in",
+              "contains"
+            ]
+          }
+        },
+        "enum_values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "availability": {
+          "enum": [
+            "source_dependent",
+            "conditional",
+            "blocked"
+          ]
+        },
+        "filterable": {
+          "type": "boolean"
+        },
+        "coverage_requirement": {
+          "enum": [
+            "none",
+            "source_scope",
+            "complete"
+          ]
+        },
+        "coverage_note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {},
+        "unknown_policy": {},
+        "refresh": {}
+      },
+      "additionalProperties": false
+    },
+    "CriteriaResult": {
+      "type": "object",
+      "required": [
+        "snapshot_id",
+        "data_mode",
+        "version",
+        "criteria"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string"
+        },
+        "data_mode": {
+          "enum": [
+            "demo",
+            "real"
+          ]
+        },
+        "version": {
+          "const": "1.1"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "FieldCoverage": {
+      "type": "object",
+      "required": [
+        "key",
+        "unit",
+        "populated_count",
+        "unknown_count",
+        "stale_count",
+        "quality_counts"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "populated_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stale_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quality_counts": {
+          "type": "object",
+          "required": [
+            "observed",
+            "derived",
+            "estimated",
+            "illustrative",
+            "render_fallback"
+          ],
+          "properties": {
+            "observed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "derived": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "estimated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "illustrative": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "render_fallback": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "DistributionBin": {
+      "type": "object",
+      "required": [
+        "lower",
+        "upper",
+        "upper_inclusive",
+        "count"
+      ],
+      "properties": {
+        "lower": {
+          "type": "number"
+        },
+        "upper": {
+          "type": "number"
+        },
+        "upper_inclusive": {
+          "type": "boolean"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "FieldDistribution": {
+      "type": "object",
+      "required": [
+        "key",
+        "unit",
+        "basis",
+        "population_count",
+        "sample_count",
+        "missing_count",
+        "excluded_count",
+        "bins"
+      ],
+      "properties": {
+        "key": {
+          "enum": [
+            "offer.price_total_rub",
+            "unit.area_sqm"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "RUB",
+            "m²"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "asking_total",
+            "total_area"
+          ]
+        },
+        "population_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bins": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/DistributionBin"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DatasetCoverage": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "data_mode",
+        "status",
+        "snapshot_at",
+        "records_total",
+        "complexes_total",
+        "fields",
+        "distributions"
+      ],
+      "properties": {
+        "dataset_id": {
+          "enum": [
+            "demo_offers",
+            "real_current_offers",
+            "city_geometry",
+            "building_registry",
+            "developer_building_registry"
+          ]
+        },
+        "data_mode": {
+          "enum": [
+            "demo",
+            "real",
+            "geospatial",
+            "registry"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "records_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complexes_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldCoverage"
+          }
+        },
+        "distributions": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/FieldDistribution"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DataCoverageResult": {
+      "type": "object",
+      "required": [
+        "snapshot_id",
+        "data_mode",
+        "generated_at",
+        "criteria_total",
+        "datasets"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string"
+        },
+        "data_mode": {
+          "enum": [
+            "demo",
+            "real"
+          ]
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "criteria_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "datasets": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/DatasetCoverage"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelCandidateCounts": {
+      "type": "object",
+      "required": [
+        "scanned",
+        "ready",
+        "review",
+        "rejected",
+        "unavailable"
+      ],
+      "properties": {
+        "scanned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ready": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelCandidateFacets": {
+      "type": "object",
+      "required": [
+        "reason_codes",
+        "source_groups"
+      ],
+      "properties": {
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegistryFacet"
+          }
+        },
+        "source_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegistryFacet"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelCandidateSnapshot": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "registry_snapshot_id",
+        "model_run_id",
+        "checked_at"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "model_candidates"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ModelCandidateSummary": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "registry_snapshot_id",
+        "model_run_id",
+        "checked_at",
+        "run_status",
+        "counts",
+        "facets"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "model_candidates"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "run_status": {
+          "const": "ready"
+        },
+        "counts": {
+          "$ref": "#/$defs/ModelCandidateCounts"
+        },
+        "facets": {
+          "$ref": "#/$defs/ModelCandidateFacets"
+        },
+        "ready_depictions": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "construction_outline",
+              "project_footprint",
+              "schematic_massing",
+              "licensed_exterior"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ModelCandidateItem": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "registry_id",
+        "name",
+        "source_group",
+        "entity_type",
+        "decision",
+        "asset_readiness",
+        "project_link_status",
+        "ready_to_render",
+        "depiction",
+        "model_quality",
+        "geometry_quality",
+        "geometry_as_of",
+        "render_height_m",
+        "height_evidence",
+        "reason_codes",
+        "explanation_ru",
+        "next_step_ru"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^cand_[a-f0-9]{24}$"
+        },
+        "registry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_group": {
+          "enum": [
+            "registry",
+            "mapped_construction",
+            "external_event"
+          ]
+        },
+        "entity_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "enum": [
+            "ready",
+            "review",
+            "rejected",
+            "unavailable"
+          ]
+        },
+        "asset_readiness": {
+          "enum": [
+            "ready_to_render",
+            "review",
+            "unavailable"
+          ]
+        },
+        "project_link_status": {
+          "enum": [
+            "verified",
+            "review",
+            "unlinked"
+          ]
+        },
+        "ready_to_render": {
+          "type": "boolean"
+        },
+        "depiction": {
+          "enum": [
+            "construction_outline",
+            "project_footprint",
+            "schematic_massing",
+            "licensed_exterior",
+            "none"
+          ]
+        },
+        "model_quality": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "geometry_quality": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "geometry_as_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "render_height_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "height_evidence": {
+          "type": "object",
+          "required": [
+            "mapped_height_m",
+            "mapped_levels",
+            "estimated_render_height_m",
+            "render_height_m",
+            "render_height_basis"
+          ],
+          "properties": {
+            "mapped_height_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "mapped_levels": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "estimated_render_height_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "render_height_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "render_height_basis": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "explanation_ru": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_step_ru": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ModelCandidateTileset": {
+      "type": "object",
+      "required": [
+        "url",
+        "kind",
+        "model_quality",
+        "attribution"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^/assets/public-[A-Za-z0-9_./-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_quality": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "ModelCandidateAttempt": {
+      "type": "object",
+      "required": [
+        "code",
+        "label_ru",
+        "result_ru",
+        "count"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "label_ru": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result_ru": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelPreviewRing": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/LonLat"
+      }
+    },
+    "ModelPreviewPolygon": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/ModelPreviewRing"
+      }
+    },
+    "ModelPreviewGeometry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "coordinates"
+          ],
+          "properties": {
+            "type": {
+              "const": "Polygon"
+            },
+            "coordinates": {
+              "$ref": "#/$defs/ModelPreviewPolygon"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "coordinates"
+          ],
+          "properties": {
+            "type": {
+              "const": "MultiPolygon"
+            },
+            "coordinates": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 512,
+              "items": {
+                "$ref": "#/$defs/ModelPreviewPolygon"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ModelCandidateListResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ModelCandidateSnapshot"
+        },
+        {
+          "type": "object",
+          "required": [
+            "dataset_total",
+            "records_total",
+            "limit",
+            "offset",
+            "items"
+          ],
+          "properties": {
+            "dataset_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "records_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/ModelCandidateItem"
+                  },
+                  {
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "model_tileset"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "selected_model"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "tileset_url"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "geometry_url"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "attempts"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ModelCandidateDetailResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ModelCandidateSnapshot"
+        },
+        {
+          "type": "object",
+          "required": [
+            "item"
+          ],
+          "properties": {
+            "item": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ModelCandidateItem"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "model_tileset",
+                    "attempts"
+                  ],
+                  "properties": {
+                    "model_tileset": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/$defs/ModelCandidateTileset"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "attempts": {
+                      "type": "array",
+                      "maxItems": 8,
+                      "items": {
+                        "$ref": "#/$defs/ModelCandidateAttempt"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ModelCandidateGeometryResult": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ModelCandidateSnapshot"
+        },
+        {
+          "type": "object",
+          "required": [
+            "candidate_id",
+            "center",
+            "bbox",
+            "footprint",
+            "preview_geometry",
+            "render_height_m",
+            "height_evidence",
+            "model_tileset"
+          ],
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "pattern": "^cand_[a-f0-9]{24}$"
+            },
+            "center": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LonLat"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bbox": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "footprint": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "$ref": "#/$defs/LonLat"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "preview_geometry": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ModelPreviewGeometry"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "render_height_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "height_evidence": {
+              "$ref": "#/$defs/ModelCandidateItem/properties/height_evidence"
+            },
+            "model_tileset": {
+              "$ref": "#/$defs/ModelCandidateTileset"
+            }
+          }
+        }
+      ]
+    },
+    "RegistryBuilding": {
+      "type": "object",
+      "required": [
+        "registry_id",
+        "name",
+        "record_kind",
+        "city",
+        "address",
+        "location",
+        "location_quality",
+        "latest_known_date",
+        "status",
+        "handover",
+        "handover_year",
+        "handover_quarter",
+        "handover_precision",
+        "floors",
+        "building_type",
+        "has_apartment_data",
+        "offer_count",
+        "price"
+      ],
+      "properties": {
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_kind": {
+          "enum": [
+            "multifamily",
+            "apartment_complex",
+            "low_rise"
+          ]
+        },
+        "city": {
+          "const": "Москва"
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LonLat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_quality": {
+          "enum": [
+            "verified",
+            null
+          ]
+        },
+        "latest_known_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handover": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handover_year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "handover_quarter": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 4
+        },
+        "handover_precision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floors": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "building_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "has_apartment_data": {
+          "const": false
+        },
+        "offer_count": {
+          "const": 0
+        },
+        "price": {
+          "type": "null"
+        }
+      },
+      "additionalProperties": true
+    },
+    "RegistryListResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "snapshot_id",
+        "snapshot_at",
+        "dataset_total",
+        "source_total",
+        "archived_total",
+        "records_total",
+        "limit",
+        "offset",
+        "facets",
+        "items"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "building_registry"
+        },
+        "snapshot_id": {
+          "type": "string"
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "dataset_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "archived_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "records_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "facets": {
+          "type": "object",
+          "required": [
+            "statuses",
+            "kinds",
+            "districts",
+            "district_coverage_count",
+            "district_source_release",
+            "handover_years",
+            "numeric_floors_count",
+            "walking_origin_count"
+          ],
+          "properties": {
+            "statuses": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RegistryFacet"
+              }
+            },
+            "kinds": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RegistryFacet"
+              }
+            },
+            "districts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RegistryFacet"
+              }
+            },
+            "district_coverage_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "district_source_release": {
+              "type": "string",
+              "minLength": 1
+            },
+            "handover_years": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RegistryFacet"
+              }
+            },
+            "numeric_floors_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "walking_origin_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegistryBuilding"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegistryFacet": {
+      "type": "object",
+      "required": [
+        "value",
+        "count"
+      ],
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegistryMapResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "snapshot_id",
+        "snapshot_at",
+        "center",
+        "tilesets",
+        "items",
+        "counts",
+        "applied_filters"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "building_registry"
+        },
+        "snapshot_id": {
+          "type": "string"
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "center": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "tilesets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Tileset"
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegistryBuilding"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "records",
+            "geocoded",
+            "source_records",
+            "archived_records",
+            "offers",
+            "city_buildings",
+            "facade_models"
+          ],
+          "properties": {
+            "records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "geocoded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source_records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "archived_records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "offers": {
+              "const": 0
+            },
+            "city_buildings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "facade_models": {
+              "const": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/RegistryAppliedFilters"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegistryAppliedFilters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "kind": {
+          "enum": [
+            "multifamily",
+            "apartment_complex",
+            "low_rise"
+          ]
+        },
+        "district": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "handover_year": {
+          "type": "integer",
+          "minimum": 1900,
+          "maximum": 2100
+        },
+        "handover_quarter": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "floors_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "floors_max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "walk_metro_max_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 180
+        },
+        "walk_school_max_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 180
+        },
+        "walk_kindergarten_max_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 180
+        },
+        "walk_medical_max_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 180
+        }
+      },
+      "additionalProperties": false
+    },
+    "MapPoint": {
+      "type": "object",
+      "required": [
+        "point_id",
+        "point_type",
+        "registry_id",
+        "candidate_id",
+        "name",
+        "location",
+        "latest_known_date",
+        "geometry_as_of",
+        "address",
+        "address_basis",
+        "complex_label",
+        "complex_label_basis",
+        "known_catalog_registry_id"
+      ],
+      "properties": {
+        "point_id": {
+          "type": "string",
+          "pattern": "^mappt_[a-f0-9]{24}$"
+        },
+        "point_type": {
+          "enum": [
+            "registry",
+            "mapped_construction"
+          ]
+        },
+        "registry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^cand_[a-f0-9]{24}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "latest_known_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "geometry_as_of": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "address_basis": {
+          "enum": [
+            "registry_source",
+            "osm_street_house",
+            "osm_place_house",
+            "osm_street",
+            "osm_place",
+            null
+          ]
+        },
+        "complex_label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "complex_label_basis": {
+          "enum": [
+            "registry_source_name",
+            "osm_addr_place",
+            "osm_name",
+            "osm_parent_relation",
+            null
+          ]
+        },
+        "known_catalog_registry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^registry-[a-f0-9]{24}$"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "point_type": {
+              "const": "registry"
+            },
+            "registry_id": {
+              "type": "string"
+            },
+            "candidate_id": {
+              "type": "null"
+            },
+            "geometry_as_of": {
+              "type": "null"
+            },
+            "known_catalog_registry_id": {
+              "type": "string"
+            },
+            "address_basis": {
+              "enum": [
+                "registry_source",
+                null
+              ]
+            },
+            "complex_label_basis": {
+              "enum": [
+                "registry_source_name",
+                null
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "point_type": {
+              "const": "mapped_construction"
+            },
+            "registry_id": {
+              "type": "null"
+            },
+            "candidate_id": {
+              "type": "string"
+            },
+            "latest_known_date": {
+              "type": "null"
+            },
+            "known_catalog_registry_id": {
+              "type": "null"
+            },
+            "address_basis": {
+              "enum": [
+                "osm_street_house",
+                "osm_place_house",
+                "osm_street",
+                "osm_place",
+                null
+              ]
+            },
+            "complex_label_basis": {
+              "enum": [
+                "osm_addr_place",
+                "osm_name",
+                "osm_parent_relation",
+                null
+              ]
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "address": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "address_basis": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "address_basis": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "complex_label": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "complex_label_basis": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "complex_label_basis": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "MapPointGroup": {
+      "type": "object",
+      "required": [
+        "group_id",
+        "group_scope",
+        "identity_basis",
+        "group_label",
+        "point_ids"
+      ],
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "pattern": "^group_[a-f0-9]{24}$"
+        },
+        "group_scope": {
+          "const": "residential_complex"
+        },
+        "identity_basis": {
+          "enum": [
+            "source_complex_id",
+            "explicit_relation_membership",
+            "verified_crosswalk"
+          ]
+        },
+        "group_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "point_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^mappt_[a-f0-9]{24}$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "MapPointGroupEvidence": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "visibility",
+        "registry_snapshot_id",
+        "model_run_id",
+        "groups"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "visibility": {
+          "const": "public"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MapPointGroup"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "MapPointsResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "registry_snapshot_id",
+        "model_run_id",
+        "snapshot_at",
+        "checked_at",
+        "registry_rights_status",
+        "mapped_attribution",
+        "dataset_total",
+        "registry_source_total",
+        "registry_archived_total",
+        "counts",
+        "applied_filters",
+        "items",
+        "group_evidence"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "map_points"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "registry_rights_status": {
+          "const": "user_supplied_internal_use"
+        },
+        "mapped_attribution": {
+          "type": "string",
+          "pattern": "OpenStreetMap"
+        },
+        "dataset_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "registry_source_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "registry_archived_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "points",
+            "registry_points",
+            "registry_points_total",
+            "mapped_construction_points",
+            "coordinate_positions",
+            "excluded_mapped_by_registry_filters"
+          ],
+          "properties": {
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "registry_points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "registry_points_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mapped_construction_points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coordinate_positions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excluded_mapped_by_registry_filters": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/RegistryAppliedFilters"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MapPoint"
+          }
+        },
+        "group_evidence": {
+          "$ref": "#/$defs/MapPointGroupEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperBuilding": {
+      "type": "object",
+      "required": [
+        "registry_id",
+        "point_id",
+        "point_type",
+        "name",
+        "record_kind",
+        "complex_label",
+        "developer_name",
+        "address",
+        "address_complete",
+        "address_basis",
+        "location",
+        "location_quality",
+        "location_basis",
+        "map_eligible",
+        "unit_count",
+        "observed_at",
+        "city",
+        "latest_known_date",
+        "status",
+        "handover",
+        "handover_year",
+        "handover_quarter",
+        "handover_precision",
+        "floors",
+        "building_type",
+        "has_apartment_data",
+        "offer_count",
+        "price"
+      ],
+      "properties": {
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "point_id": {
+          "type": "string",
+          "pattern": "^mappt_[a-f0-9]{24}$"
+        },
+        "point_type": {
+          "const": "developer_building"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_kind": {
+          "const": "developer_building"
+        },
+        "complex_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "developer_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address_complete": {
+          "type": "boolean"
+        },
+        "address_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LonLat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_quality": {
+          "enum": [
+            "verified",
+            null
+          ]
+        },
+        "location_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "map_eligible": {
+          "type": "boolean"
+        },
+        "unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "city": {
+          "const": "Москва"
+        },
+        "latest_known_date": {
+          "type": "null"
+        },
+        "status": {
+          "type": "null"
+        },
+        "handover": {
+          "type": "null"
+        },
+        "handover_year": {
+          "type": "null"
+        },
+        "handover_quarter": {
+          "type": "null"
+        },
+        "handover_precision": {
+          "type": "null"
+        },
+        "floors": {
+          "type": "null"
+        },
+        "building_type": {
+          "type": "null"
+        },
+        "has_apartment_data": {
+          "const": true
+        },
+        "offer_count": {
+          "const": 0
+        },
+        "price": {
+          "type": "null"
+        },
+        "matching_units_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperRegistryListResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "snapshot_id",
+        "map_run_id",
+        "snapshot_at",
+        "dataset_total",
+        "source_total",
+        "archived_total",
+        "records_total",
+        "limit",
+        "offset",
+        "facets",
+        "items",
+        "unit_run_id",
+        "applied_filters"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "developer_building_registry"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "dataset_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "archived_total": {
+          "const": 0
+        },
+        "records_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "facets": {
+          "type": "object",
+          "required": [
+            "developers",
+            "map_eligible_count",
+            "unlocated_count"
+          ],
+          "properties": {
+            "developers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RegistryFacet"
+              }
+            },
+            "map_eligible_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unlocated_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperBuilding"
+          }
+        },
+        "unit_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperRegistryMapResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "snapshot_id",
+        "map_run_id",
+        "snapshot_at",
+        "center",
+        "tilesets",
+        "items",
+        "counts",
+        "applied_filters",
+        "unit_run_id"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "developer_building_registry"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "center": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "tilesets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Tileset"
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperBuilding"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "records",
+            "geocoded",
+            "offers",
+            "source_records",
+            "archived_records",
+            "city_buildings",
+            "facade_models"
+          ],
+          "properties": {
+            "records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "geocoded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "offers": {
+              "const": 0
+            },
+            "source_records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "archived_records": {
+              "const": 0
+            },
+            "city_buildings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "facade_models": {
+              "const": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
+        "unit_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperMapPoint": {
+      "type": "object",
+      "required": [
+        "registry_id",
+        "point_id",
+        "point_type",
+        "name",
+        "record_kind",
+        "complex_label",
+        "developer_name",
+        "address",
+        "address_complete",
+        "address_basis",
+        "location",
+        "location_quality",
+        "location_basis",
+        "unit_count",
+        "observed_at",
+        "city",
+        "latest_known_date"
+      ],
+      "properties": {
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "point_id": {
+          "type": "string",
+          "pattern": "^mappt_[a-f0-9]{24}$"
+        },
+        "point_type": {
+          "const": "developer_building"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_kind": {
+          "const": "developer_building"
+        },
+        "complex_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "developer_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address_complete": {
+          "type": "boolean"
+        },
+        "address_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "location_quality": {
+          "const": "verified"
+        },
+        "location_basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "city": {
+          "const": "Москва"
+        },
+        "latest_known_date": {
+          "type": "null"
+        },
+        "matching_units_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperMapPointsResult": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "registry_snapshot_id",
+        "map_run_id",
+        "snapshot_at",
+        "checked_at",
+        "dataset_total",
+        "counts",
+        "applied_filters",
+        "group_evidence",
+        "items",
+        "unit_run_id"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "developer_map_points"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dataset_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "points",
+            "registry_points",
+            "registry_points_total",
+            "mapped_construction_points",
+            "excluded_mapped_by_registry_filters",
+            "developer_building_points",
+            "developer_building_points_total",
+            "unlocated_buildings",
+            "coordinate_positions"
+          ],
+          "properties": {
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "registry_points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "registry_points_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mapped_construction_points": {
+              "const": 0
+            },
+            "excluded_mapped_by_registry_filters": {
+              "const": 0
+            },
+            "developer_building_points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "developer_building_points_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unlocated_buildings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coordinate_positions": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
+        "group_evidence": {
+          "type": "object",
+          "required": [
+            "schema_version",
+            "visibility",
+            "registry_snapshot_id",
+            "map_run_id",
+            "groups"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "visibility": {
+              "const": "public"
+            },
+            "registry_snapshot_id": {
+              "type": "string",
+              "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+            },
+            "map_run_id": {
+              "type": "string",
+              "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MapPointGroup"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperMapPoint"
+          }
+        },
+        "unit_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyCoordinate": {
+      "type": "object",
+      "required": [
+        "lon",
+        "lat"
+      ],
+      "properties": {
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyRoute": {
+      "type": "object",
+      "required": [
+        "status",
+        "distance_m",
+        "estimated_minutes",
+        "geometry",
+        "approximate",
+        "origin_access_kind",
+        "target_access_kind",
+        "endpoint_coordinate",
+        "endpoint_basis",
+        "endpoint_note"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "routed",
+            "no_route",
+            "snap_exceeds_threshold",
+            "unavailable",
+            "invalid_route",
+            "contains_ferry"
+          ]
+        },
+        "distance_m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimated_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 512,
+              "items": {
+                "$ref": "#/$defs/LonLat"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "approximate": {
+          "const": true
+        },
+        "origin_access_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_access_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint_coordinate": {
+          "$ref": "#/$defs/NearbyCoordinate"
+        },
+        "endpoint_basis": {
+          "enum": [
+            "source_access_point",
+            "source_point",
+            "source_geometry_representative_point"
+          ]
+        },
+        "endpoint_note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snap_distance_m": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "geometry_simplification_tolerance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "routing_basis": {
+          "enum": [
+            "local_pedestrian_graph",
+            "local_pedestrian_graph_with_estimated_origin_connector"
+          ]
+        },
+        "estimate_basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin_access": {
+          "$ref": "#/$defs/NearbyOriginAccess"
+        },
+        "network_geometry": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 512,
+          "items": {
+            "$ref": "#/$defs/LonLat"
+          }
+        },
+        "network_distance_m": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "network_estimated_minutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "network_snap_distance_m": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyPoi": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "category",
+        "coordinate",
+        "coordinate_basis",
+        "straight_line_m",
+        "metro_access_link",
+        "route",
+        "free_oms",
+        "osm_updated_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^poi_[a-f0-9]{24}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "metro_station",
+            "school",
+            "kindergarten",
+            "clinic"
+          ]
+        },
+        "coordinate": {
+          "$ref": "#/$defs/NearbyCoordinate"
+        },
+        "coordinate_basis": {
+          "enum": [
+            "source_access_point",
+            "source_point",
+            "source_geometry_representative_point"
+          ]
+        },
+        "straight_line_m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "metro_access_link": {
+          "enum": [
+            "unknown",
+            "explicit_osm_relation_membership",
+            null
+          ]
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NearbyRoute"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "free_oms": {
+          "type": "object",
+          "required": [
+            "status",
+            "scope"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "verified_program_participant",
+                "unknown"
+              ]
+            },
+            "scope": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "official_snapshot_at": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "additionalProperties": false
+        },
+        "osm_updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "station_identity_basis": {
+          "enum": [
+            "explicit_osm_stop_area_relation",
+            "exact_name_and_local_distance_uncertain",
+            "osm_station_feature"
+          ]
+        },
+        "station_identity_uncertain": {
+          "type": "boolean"
+        },
+        "station_member_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbySelectedPoi": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NearbyPoi"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "route": {
+              "$ref": "#/$defs/NearbyRoute"
+            }
+          }
+        }
+      ]
+    },
+    "NearbyViewportPoi": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NearbyPoi"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "route": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "NearbyPointLayer": {
+      "type": "object",
+      "required": [
+        "items",
+        "ranking_basis",
+        "selection_policy",
+        "candidate_count",
+        "coverage",
+        "attribution"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/NearbySelectedPoi"
+          }
+        },
+        "ranking_basis": {
+          "enum": [
+            "walking_distance",
+            "walking_distance_with_unrouted_nearby",
+            "walking_distance_per_subcategory",
+            "walking_distance_with_unrouted_nearby_per_subcategory",
+            "local_walking_distance_plus_verified_oms_exception"
+          ]
+        },
+        "selection_policy": {
+          "enum": [
+            "nearest_two_walkable_stations",
+            "up_to_two_schools_and_two_kindergartens",
+            "up_to_two_school",
+            "up_to_two_kindergarten",
+            "nearest_two_walkable_clinics",
+            "nearest_local_plus_verified_oms"
+          ]
+        },
+        "required_clinic_included": {
+          "type": "boolean"
+        },
+        "verified_oms_added_as_exception": {
+          "type": "boolean"
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 22
+        },
+        "verified_oms_site_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage": {
+          "const": "unknown"
+        },
+        "attribution": {
+          "type": "string",
+          "pattern": "OpenStreetMap"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyPointResult": {
+      "type": "object",
+      "required": [
+        "status",
+        "point_id",
+        "education",
+        "origin",
+        "dataset_id",
+        "osm_snapshot_at",
+        "layers",
+        "free_clinic_guarantee",
+        "coverage",
+        "attribution",
+        "registry_snapshot_id"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "model_run_id"
+          ]
+        },
+        {
+          "required": [
+            "map_run_id"
+          ]
+        }
+      ],
+      "properties": {
+        "status": {
+          "const": "ok"
+        },
+        "point_id": {
+          "type": "string",
+          "pattern": "^mappt_[a-f0-9]{24}$"
+        },
+        "education": {
+          "enum": [
+            "all",
+            "school",
+            "kindergarten"
+          ]
+        },
+        "origin": {
+          "type": "object",
+          "required": [
+            "coordinate",
+            "access_kind"
+          ],
+          "properties": {
+            "coordinate": {
+              "$ref": "#/$defs/NearbyCoordinate"
+            },
+            "access_kind": {
+              "const": "mapped_point_access_unknown"
+            }
+          },
+          "additionalProperties": false
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "osm_snapshot_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "layers": {
+          "type": "object",
+          "required": [
+            "metro",
+            "education",
+            "medical"
+          ],
+          "properties": {
+            "metro": {
+              "$ref": "#/$defs/NearbyPointLayer"
+            },
+            "education": {
+              "$ref": "#/$defs/NearbyPointLayer"
+            },
+            "medical": {
+              "$ref": "#/$defs/NearbyPointLayer"
+            }
+          },
+          "additionalProperties": false
+        },
+        "free_clinic_guarantee": {
+          "type": "object",
+          "required": [
+            "status",
+            "scope"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "met",
+                "unavailable"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "coverage": {
+          "type": "object",
+          "required": [
+            "poi",
+            "routes",
+            "candidate_limit_per_subcategory",
+            "verified_oms_candidate_limit",
+            "ranking_basis"
+          ],
+          "properties": {
+            "poi": {
+              "const": "unknown"
+            },
+            "routes": {
+              "const": "bounded_candidate_pool"
+            },
+            "candidate_limit_per_subcategory": {
+              "const": 8
+            },
+            "verified_oms_candidate_limit": {
+              "const": 6
+            },
+            "ranking_basis": {
+              "const": "walking_distance_when_routed"
+            }
+          },
+          "additionalProperties": false
+        },
+        "attribution": {
+          "type": "string",
+          "pattern": "OpenStreetMap"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyViewportLayer": {
+      "type": "object",
+      "required": [
+        "items",
+        "coverage",
+        "attribution"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 150,
+          "items": {
+            "$ref": "#/$defs/NearbyViewportPoi"
+          }
+        },
+        "coverage": {
+          "const": "unknown"
+        },
+        "attribution": {
+          "type": "string",
+          "pattern": "OpenStreetMap"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyViewportResult": {
+      "type": "object",
+      "required": [
+        "status",
+        "dataset_id",
+        "osm_snapshot_at",
+        "education",
+        "bbox",
+        "layers",
+        "truncated",
+        "returned_count",
+        "coverage",
+        "attribution",
+        "registry_snapshot_id"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "model_run_id"
+          ]
+        },
+        {
+          "required": [
+            "map_run_id"
+          ]
+        }
+      ],
+      "properties": {
+        "status": {
+          "const": "ok"
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "osm_snapshot_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "education": {
+          "enum": [
+            "all",
+            "school",
+            "kindergarten"
+          ]
+        },
+        "bbox": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
+        "layers": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 3,
+          "properties": {
+            "metro": {
+              "$ref": "#/$defs/NearbyViewportLayer"
+            },
+            "education": {
+              "$ref": "#/$defs/NearbyViewportLayer"
+            },
+            "medical": {
+              "$ref": "#/$defs/NearbyViewportLayer"
+            }
+          },
+          "additionalProperties": false
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "returned_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 150
+        },
+        "coverage": {
+          "type": "object",
+          "required": [
+            "poi"
+          ],
+          "properties": {
+            "poi": {
+              "const": "unknown"
+            }
+          },
+          "additionalProperties": false
+        },
+        "attribution": {
+          "type": "string",
+          "pattern": "OpenStreetMap"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Offer": {
+      "type": "object",
+      "required": [
+        "offer_id",
+        "unit_id",
+        "complex_id",
+        "district_id",
+        "price",
+        "source",
+        "availability"
+      ],
+      "properties": {
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "building_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "section_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floor_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "complex_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "district_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rooms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "area_sqm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "floor": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Price"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/OfferSource"
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unknown",
+            null
+          ]
+        },
+        "facts": {
+          "$ref": "#/$defs/Facts"
+        },
+        "recommendation": {
+          "$ref": "#/$defs/Recommendation"
+        }
+      },
+      "additionalProperties": true
+    },
+    "Complex": {
+      "type": "object",
+      "required": [
+        "complex_id",
+        "name",
+        "district_id",
+        "location",
+        "source"
+      ],
+      "properties": {
+        "complex_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "district_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "developer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "model_quality": {
+          "enum": [
+            "synthetic_massing",
+            "synthetic_facade",
+            "licensed_facade",
+            "none"
+          ]
+        },
+        "facts": {
+          "$ref": "#/$defs/Facts"
+        }
+      },
+      "additionalProperties": true
+    },
+    "LonLat": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      ],
+      "items": false
+    },
+    "MapComplex": {
+      "type": "object",
+      "required": [
+        "complex_id",
+        "name",
+        "district_id",
+        "location",
+        "model_quality",
+        "offer_count"
+      ],
+      "properties": {
+        "complex_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "district_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "$ref": "#/$defs/LonLat"
+        },
+        "model_quality": {
+          "enum": [
+            "synthetic_massing",
+            "synthetic_facade",
+            "licensed_facade",
+            "none"
+          ]
+        },
+        "offer_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "facts": {
+          "$ref": "#/$defs/Facts"
+        }
+      },
+      "additionalProperties": true
+    },
+    "Tileset": {
+      "type": "object",
+      "required": [
+        "id",
+        "url",
+        "kind",
+        "model_quality",
+        "label",
+        "attribution"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^/assets/"
+        },
+        "kind": {
+          "enum": [
+            "ground_buildings",
+            "city_volumes",
+            "facade",
+            "roads",
+            "parks",
+            "water"
+          ]
+        },
+        "model_quality": {
+          "enum": [
+            "synthetic_massing",
+            "synthetic_facade",
+            "licensed_facade",
+            "cartographic_ribbon",
+            "cartographic_surface"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "Filters": {
+      "type": "object",
+      "properties": {
+        "budget_min_rub": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "budget_max_rub": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "district_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "complex_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
+        },
+        "area_min_sqm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "area_max_sqm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "price_basis": {
+          "enum": [
+            "asking_total",
+            "conditional_total"
+          ]
+        },
+        "predicates": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "$ref": "#/$defs/Predicate"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "QueryRequest": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1000
+        },
+        "filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "preferences": {
+          "type": "object",
+          "properties": {
+            "infrastructure_categories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Clarification": {
+      "type": "object",
+      "required": [
+        "field",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SearchResult": {
+      "type": "object",
+      "required": [
+        "snapshot_id",
+        "data_mode",
+        "items",
+        "count",
+        "applied_filters",
+        "coverage"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string"
+        },
+        "data_mode": {
+          "enum": [
+            "demo",
+            "real"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Offer"
+          }
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "clarification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Clarification"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "data_mode": {
+                "const": "real"
+              }
+            },
+            "required": [
+              "data_mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "source": {
+                      "properties": {
+                        "record_mode": {
+                          "enum": [
+                            "developer_offer",
+                            "asking_price"
+                          ]
+                        },
+                        "quality": {
+                          "const": "dated_asking"
+                        },
+                        "rights_status": {
+                          "const": "cleared"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TimingMetric": {
+      "type": "object",
+      "required": [
+        "starts",
+        "paired_events",
+        "unmatched_starts",
+        "status",
+        "median_s",
+        "p90_s"
+      ],
+      "properties": {
+        "starts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paired_events": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unmatched_starts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "insufficient_data"
+          ]
+        },
+        "median_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "p90_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperUnitPlan": {
+      "type": "object",
+      "required": [
+        "role",
+        "asset_url",
+        "asset_sha256",
+        "mime_type",
+        "geometry_status"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "apartment_plan",
+            "furnished_apartment_plan",
+            "floor_plan"
+          ]
+        },
+        "asset_url": {
+          "type": "string",
+          "pattern": "^/v1/developer-unit-assets/[a-f0-9]{64}$"
+        },
+        "asset_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "mime_type": {
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        },
+        "geometry_status": {
+          "const": "source_plan_image"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperUnit": {
+      "type": "object",
+      "required": [
+        "unit_id",
+        "unit_label",
+        "section_id",
+        "section_label",
+        "floor_id",
+        "floor_number",
+        "rooms_label",
+        "area_m2",
+        "price_rub",
+        "price_context",
+        "observed_at",
+        "record_updated_at",
+        "availability",
+        "has_prepared_plan"
+      ],
+      "properties": {
+        "unit_id": {
+          "type": "string",
+          "pattern": "^unit_[a-f0-9]{24}$"
+        },
+        "unit_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^section_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floor_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^floor_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "floor_number": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rooms_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "area_m2": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_rub": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_context": {
+          "enum": [
+            "payment_100_percent",
+            "promotion_or_conditions",
+            "source_base_amount",
+            "source_displayed_total",
+            "conditions_unverified"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "availability": {
+          "const": "unknown"
+        },
+        "has_prepared_plan": {
+          "type": "boolean"
+        },
+        "record_updated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperFloor": {
+      "type": "object",
+      "required": [
+        "floor_id",
+        "floor_number",
+        "unit_count",
+        "geometry_status",
+        "plan"
+      ],
+      "properties": {
+        "floor_id": {
+          "type": "string",
+          "pattern": "^floor_[a-f0-9]{24}$"
+        },
+        "floor_number": {
+          "type": "integer"
+        },
+        "unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "geometry_status": {
+          "enum": [
+            "none",
+            "source_plan_image"
+          ]
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeveloperUnitPlan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperSection": {
+      "type": "object",
+      "required": [
+        "section_id",
+        "section_label",
+        "total_floors",
+        "total_floors_basis",
+        "floors"
+      ],
+      "properties": {
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^section_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_floors": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "total_floors_basis": {
+          "enum": [
+            "source_section_floor_count",
+            null
+          ]
+        },
+        "floors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperFloor"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperFloorsResult": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "registry_id",
+        "observed_at",
+        "total_floors",
+        "max_observed_unit_floor",
+        "sections",
+        "unassigned_unit_count"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "total_floors": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_observed_unit_floor": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperSection"
+          }
+        },
+        "unassigned_unit_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperPlanRegion": {
+      "type": "object",
+      "required": [
+        "region_id",
+        "polygon",
+        "coordinate_frame",
+        "source_label",
+        "source_rooms",
+        "source_area_m2",
+        "unit_id",
+        "match_status",
+        "basis",
+        "reconstruction",
+        "unit_action"
+      ],
+      "properties": {
+        "region_id": {
+          "type": "string",
+          "pattern": "^region_[a-f0-9]{24}$"
+        },
+        "polygon": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 100,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "coordinate_frame": {
+          "const": "image_normalized_top_left"
+        },
+        "source_label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "source_rooms": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "source_area_m2": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "unit_id": {
+          "type": "null"
+        },
+        "match_status": {
+          "const": "unconfirmed"
+        },
+        "basis": {
+          "const": "raster_traced_floor_plan"
+        },
+        "reconstruction": {
+          "const": true
+        },
+        "unit_action": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperFloorDetail": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "registry_id",
+        "floor_id",
+        "section_id",
+        "section_label",
+        "floor_number",
+        "unit_count",
+        "geometry_status",
+        "plan",
+        "plan_regions",
+        "hotspots"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "floor_id": {
+          "type": "string",
+          "pattern": "^floor_[a-f0-9]{24}$"
+        },
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^section_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floor_number": {
+          "type": "integer"
+        },
+        "unit_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "geometry_status": {
+          "enum": [
+            "none",
+            "source_plan_image"
+          ]
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeveloperUnitPlan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan_regions": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/DeveloperPlanRegion"
+          }
+        },
+        "hotspots": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperUnitsResult": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "registry_id",
+        "total",
+        "limit",
+        "offset",
+        "applied_filters",
+        "items"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperUnit"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperSelectedModel": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "model_run_id",
+        "registry_id",
+        "status",
+        "depiction",
+        "label",
+        "height_m",
+        "height_basis",
+        "geometry_basis",
+        "model_transform",
+        "asset_url",
+        "asset_sha256",
+        "geometry_attribution",
+        "photo_facade_reconstruction",
+        "texture_basis"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "model_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-models-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "unavailable"
+          ]
+        },
+        "depiction": {
+          "enum": [
+            "schematic_massing",
+            null
+          ]
+        },
+        "label": {
+          "enum": [
+            "реконструкция",
+            null
+          ]
+        },
+        "height_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "height_basis": {
+          "enum": [
+            "source_floor_count_times_3m_estimate",
+            "schematic_min_section_floors_times_3m_estimate",
+            null
+          ]
+        },
+        "geometry_basis": {
+          "enum": [
+            "source_building_footprint",
+            null
+          ]
+        },
+        "model_transform": {
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 16,
+              "maxItems": 16,
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asset_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^/v1/developer-model-assets/[a-f0-9]{64}$"
+        },
+        "asset_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "photo_facade_reconstruction": {
+          "type": "boolean"
+        },
+        "texture_basis": {
+          "enum": [
+            "generated_photo_informed_unoriented",
+            null
+          ]
+        },
+        "geometry_attribution": {
+          "enum": [
+            "© OpenStreetMap contributors",
+            null
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperUnitDetail": {
+      "type": "object",
+      "required": [
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "registry_id",
+        "unit_id",
+        "unit_label",
+        "section_id",
+        "section_label",
+        "floor_id",
+        "floor_number",
+        "rooms_label",
+        "area_m2",
+        "price_rub",
+        "price_context",
+        "observed_at",
+        "record_updated_at",
+        "availability",
+        "has_prepared_plan",
+        "plans"
+      ],
+      "properties": {
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "unit_id": {
+          "type": "string",
+          "pattern": "^unit_[a-f0-9]{24}$"
+        },
+        "unit_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^section_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floor_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^floor_[a-f0-9]{24}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "floor_number": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rooms_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "area_m2": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_rub": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_context": {
+          "enum": [
+            "payment_100_percent",
+            "promotion_or_conditions",
+            "source_base_amount",
+            "source_displayed_total",
+            "conditions_unverified"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "availability": {
+          "const": "unknown"
+        },
+        "has_prepared_plan": {
+          "type": "boolean"
+        },
+        "plans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperUnitPlan"
+          }
+        },
+        "record_updated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperUnitAppliedFilters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "price_min_rub": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "price_max_rub": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "price_per_m2_min_rub": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "price_per_m2_max_rub": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "rooms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "area_min_m2": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000
+        },
+        "area_max_m2": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000
+        },
+        "unit_floor_min": {
+          "type": "integer",
+          "minimum": -10,
+          "maximum": 300
+        },
+        "unit_floor_max": {
+          "type": "integer",
+          "minimum": -10,
+          "maximum": 300
+        }
+      },
+      "additionalProperties": false
+    },
+    "NearbyOriginAccess": {
+      "type": "object",
+      "required": [
+        "status",
+        "approximate",
+        "method",
+        "geometry",
+        "distance_m",
+        "estimated_minutes",
+        "source_segment_id",
+        "access_coordinate",
+        "barrier_check",
+        "caveat",
+        "policy_version"
+      ],
+      "properties": {
+        "status": {
+          "const": "estimated"
+        },
+        "approximate": {
+          "const": true
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "geometry": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/LonLat"
+          }
+        },
+        "distance_m": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimated_minutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_segment_id": {
+          "type": "string",
+          "pattern": "^segment_[a-f0-9]{16}$"
+        },
+        "access_coordinate": {
+          "$ref": "#/$defs/NearbyCoordinate"
+        },
+        "barrier_check": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caveat": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "const": "origin-access-connector-v2"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

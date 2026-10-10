@@ -1,0 +1,34 @@
+{
+  "status": "ok",
+  "content": [
+    {
+      "id": "SYNTHETIC-BNMAP-ROW-01",
+      "hc_name": "СИНТЕТИЧЕСКИЙ ЖК — не объект продажи",
+      "hc_id_hash": "SYNTHETIC-BNMAP-COMPLEX-01",
+      "developer": "СИНТЕТИЧЕСКИЙ ЗАСТРОЙЩИК",
+      "region": "Москва (synthetic fixture only)",
+      "district": "Синтетический район",
+      "building": "Синтетический корпус 1",
+      "b_id_hash": "SYNTHETIC-BNMAP-BUILDING-01",
+      "section": 2,
+      "floor": 5,
+      "numInPlatform": 12,
+      "numApartment": "SYNTHETIC-APT-0512",
+      "rooms": "2",
+      "square": "65.4000000000000001",
+      "squarePrice": 999999.99,
+      "price": 30000000,
+      "interior": "Синтетическая отделка корпуса",
+      "decoration": "да",
+      "decoration_desc": "Синтетическая отделка лота",
+      "agreement": "ДДУ (synthetic test label)",
+      "dsc": "2028-12-31",
+      "start_sales": "2026-01-01",
+      "parking_type": "подземный",
+      "create_time": "2026-10-09 09:00:00",
+      "source_url": "https://example.invalid/synthetic-offer/",
+      "a_lot_hash": "SYNTHETIC-BNMAP-LOT-01"
+    }
+  ],
+  "auth": true
+}

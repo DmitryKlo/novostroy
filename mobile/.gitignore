@@ -1,0 +1,13 @@
+/UnityProject/Library/
+/UnityProject/Temp/
+/UnityProject/Obj/
+/UnityProject/Builds/
+/UnityProject/Logs/
+/UnityProject/UserSettings/
+/Tests/bin/
+/Tests/obj/
+/Tests/__pycache__/
+/UnityProject/*.csproj
+/UnityProject/*.sln
+*.user
+.DS_Store

@@ -1,0 +1,7 @@
+# Local-only overlay for pre-deployment image/data integration checks.
+# Use only with `docker compose -p novostroy-smoke` and the smoke helper.
+services:
+  api:
+    image: novostroy-api:smoke
+  web:
+    image: novostroy-web:smoke

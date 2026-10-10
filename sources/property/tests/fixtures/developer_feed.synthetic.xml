@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SYNTHETIC DEMO ONLY. No real developer, property, availability, or price data. -->
+<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06">
+  <generation-date>2026-10-09T09:00:00+03:00</generation-date>
+  <offer internal-id="SYNTHETIC-DEMO-OFFER-001">
+    <type>продажа</type>
+    <property-type>жилая</property-type>
+    <category>квартира</category>
+    <new-flat>да</new-flat>
+    <newbuilding-id>SYNTHETIC-DEMO-PROJECT-001</newbuilding-id>
+    <newbuilding-name>Синтетический ЖК Пример</newbuilding-name>
+    <building-id>SYNTHETIC-DEMO-BUILDING-001</building-id>
+    <unit-id>SYNTHETIC-DEMO-UNIT-001</unit-id>
+    <location>
+      <locality-name>Синтетический город</locality-name>
+      <address>Синтетический переулок, дом 1</address>
+    </location>
+    <price>
+      <value>9876543210.00</value>
+      <currency>RUB</currency>
+    </price>
+    <area>
+      <value>55.50</value>
+      <unit>кв. м</unit>
+    </area>
+    <rooms>2</rooms>
+    <floor>4</floor>
+    <newbuilding-completion-date>2099-Q4</newbuilding-completion-date>
+    <image tag="plan">https://example.invalid/synthetic-plan.png</image>
+    <image tag="interior">https://example.invalid/synthetic-room.png</image>
+  </offer>
+</realty-feed>

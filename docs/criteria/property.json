@@ -1,0 +1,729 @@
+{
+  "schema_version": "property-criteria-matrix/1",
+  "language": "en",
+  "generated_at": "2026-10-09",
+  "purpose": "Automation and evidence matrix for apartment, building, and residential-complex search filters.",
+  "semantics": {
+    "missing_value": "unknown; never infer false, none, or zero from an absent source field",
+    "explicit_false": "preserve false only when the source field is present and its documented value explicitly means false",
+    "price": "base asking price is distinct from a conditional price; financing discounts/conditions are not merged into base price",
+    "price_per_sqm": "canonical value may only be derived from an eligible total RUB asking price divided by positive total area_sqm; retain provenance of both inputs and formula; a vendor squarePrice remains raw source evidence and is not substituted",
+    "source_fields": "preserve source fields losslessly, including fields not currently mapped",
+    "field_evidence_shape": {
+      "value": "typed scalar, array, object, or null",
+      "status": [
+        "observed",
+        "derived",
+        "estimated",
+        "illustrative",
+        "unknown",
+        "stale",
+        "conflict",
+        "not_applicable"
+      ],
+      "unit": "optional UCUM-like display unit",
+      "scope": "unit, offer, building, complex, or project",
+      "observed_at": "ISO-8601 timestamp with timezone for this field observation",
+      "provenance": {
+        "source_id": "stable source identifier",
+        "source_record_id": "record identifier at source",
+        "source_field": "source field/tag path",
+        "source_updated_at": "source revision time when supplied",
+        "rights_status": "demo, cleared, restricted, or unknown",
+        "method": "optional extraction or derivation method",
+        "source_version": "optional source schema/version",
+        "coverage_status": "optional field coverage state",
+        "approximate": "optional boolean indicating approximation",
+        "inputs": "for derived values, provenance entries for every input",
+        "formula": "for derived values, explicit calculation"
+      }
+    },
+    "fact_container": "record.facts maps stable criterion keys to fact objects",
+    "null_statuses": [
+      "unknown",
+      "stale",
+      "conflict",
+      "not_applicable"
+    ],
+    "price_per_sqm_value": "exact ratio object {numerator_rub: integer, denominator_sqm: decimal-string}; unit RUB/m2; never round for filtering",
+    "freshness": "field observed_at is ingestion/observation time; source_updated_at is retained separately. No source SLA is assumed. Apply the contract's offer-price freshness cutoff to offer prices only; refresh static features when source revision changes and re-evaluate stale status against an explicit as_of."
+  },
+  "sources": [
+    {
+      "id": "yandex_newbuild_yrl",
+      "name": "Yandex Realty new-build YRL requirements",
+      "url": "https://yandex.ru/support/realty-partner/ru/requirements-sale-new",
+      "access": "feed must be provided by an authorized publisher; documentation does not grant access to any developer feed",
+      "rights_status_default": "unknown",
+      "supports": [
+        "offer price/currency/unit/discount",
+        "area",
+        "rooms",
+        "floor",
+        "renovation",
+        "balcony",
+        "bathroom type or count",
+        "window view",
+        "building completion year/quarter",
+        "ceiling height",
+        "lift present",
+        "guarded building",
+        "guarded parking present"
+      ],
+      "evidence": "YRL spec describes price and discount (sections on deal terms), apartment attributes (section on living premises), and building attributes including built-year, ready-quarter, ceiling-height, lift, guarded-building, and parking. deal-status is sale/legal modality and not buyer payment method.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "bnmap_get_prices",
+      "name": "bnMAP.pro GET Prices API",
+      "url": "https://docs.bnmap.pro/api-docs/api-methods/api-get-prices",
+      "access": "personal pbi token required; paid/professional entitlement and terms must be verified by operator",
+      "rights_status_default": "unknown",
+      "supports": [
+        "price-list price and area",
+        "floor",
+        "rooms",
+        "interior/decoration",
+        "project parking type/capacity",
+        "planned commissioning date",
+        "source collection date",
+        "source URL"
+      ],
+      "evidence": "The method is the price-list data type. The response documents price as declared purchase budget and squarePrice as declared price per m²; create_time is collection date; numInPlatform is lot number on floor; start_sales is sales start; agreement is transaction contract type.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "eiszh_api",
+      "name": "ЕИСЖС / ДОМ.РФ API",
+      "url": "https://наш.дом.рф/интеграция",
+      "supporting_url": "https://xn--80az8a.xn--d1aqf.xn--p1ai/медиа/новости/2023/02/дом.рф-повысил-информативность-бизнес-сервиса-для-застройщиков",
+      "access": "commercial/professional integration; exact API field schema could not be verified without authorized API documentation/access",
+      "rights_status_default": "unknown",
+      "supports": [
+        "potential project/unit declaration characteristics, including area/rooms, energy-efficiency information, handover dates, parking-space counts; exact names and availability unverified"
+      ],
+      "evidence": "Official integration information describes REST access to current system data; official 2023 API update describes expanded premises/building characteristics and energy-efficiency information. Do not infer an exact energy-class field without the authorized schema.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "yandex_newbuildings_tsv",
+      "name": "Yandex new-build TSV registry/reference endpoint",
+      "url": "https://realty.yandex.ru/newbuildings.tsv",
+      "access": "publicly reachable endpoint; public availability does not establish redistribution or rehosting rights",
+      "rights_status_default": "unknown",
+      "supports": [
+        "reference labels/IDs only; not offers, prices, availability, or unit characteristics"
+      ],
+      "evidence": "A bounded 4096-byte HTTP 206 metadata/sample inspection was recorded in data/property/yandex_tsv_sample.json; raw sample was not retained. Current normalizer preserves row columns and labels only.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "minstroy_open_data",
+      "name": "Минстрой России: открытые наборы реестров разрешений",
+      "url": "https://minstroyrf.gov.ru/opendata/",
+      "dataset_urls": [
+        "https://minstroyrf.gov.ru/opendata/7707780887-reestrstroit/",
+        "https://minstroyrf.gov.ru/opendata/7707780887-puttingintooperation/"
+      ],
+      "access": "public machine-readable CSV/XLS releases; official reuse policy expressly permits copying, publishing, distributing, modifications, and commercial use when used lawfully, not distorted, and linked to source",
+      "rights_status_default": "cleared_with_attribution_for_open_data_records",
+      "supports": [
+        "2026-05-29 construction-permit snapshot: row number, EGRUL number, object name, developer, permit issue date, permit number",
+        "2026-05-29 commissioning-permit snapshot: row number, object name, applicant, permit issue date, permit number, EGRUL number",
+        "published title-based residential subset: 18 construction permit events and 9 commissioning permit events, all Sochi; zero explicit Moscow residential matches",
+        "two broad Moscow+housing-word narrative matches are gas-pipeline relocation events for a future residential microdistrict and are excluded from the housing layer"
+      ],
+      "does_not_support": [
+        "apartment offers or asking prices",
+        "unit-level areas/features",
+        "usable address/geocoordinates in inspected schema"
+      ],
+      "evidence": "Captured official 2026-05-29 XLS releases. Both workbooks have six columns: permit serial number, object name, applicant/developer, issue date, permit number, EGRUL number (column order differs). Residential title-prefix scan found 18 construction records and 9 commissioning records, all with explicit Sochi references and no explicit Moscow residential match. Two broader Moscow-plus-housing-term text hits describe gas-pipeline relocation events whose narrative refers to a future South Butovo microdistrict; both are retained for audit and excluded as non-residential object events. A record is a permit event, not a unique complex or active project. Neither workbook has structured address, construction start/completion dates, floor count, area, or apartment price. Original snapshots, hashes, field mappings, and reuse terms are recorded in data/property/minstroy/source_manifest.json and audit.json.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "minstroy_price_benchmarks",
+      "name": "Минстрой России: региональные/модельные ценовые benchmarks",
+      "url": "https://minstroyrf.gov.ru/opendata/7707780887-price/",
+      "related_dataset_url": "https://minstroyrf.gov.ru/opendata/7707780887-costpersquaremeter/",
+      "access": "open-data reuse under Minstroy attribution/no-distortion terms",
+      "rights_status_default": "cleared_with_attribution_for_open_data_records",
+      "supports": [
+        "historic aggregate market value per m²",
+        "historic average model-housing price per m²"
+      ],
+      "does_not_support": [
+        "current unit-level asking price",
+        "offer availability or apartment-level filters"
+      ],
+      "evidence": "The Minstroy catalogue lists dataset 71 updated 2018-08-24 and dataset 98 updated 2020-12-03; these are aggregate benchmark price statistics, not price lists or sales offers.",
+      "reviewed_at": "2026-10-09"
+    },
+    {
+      "id": "moscow_analytical_center_market_summary",
+      "name": "Аналитический центр Москвы: рынок недвижимости",
+      "url": "https://ac.mos.ru/special-projects/estate/",
+      "access": "public summary page; site materials require prior approval for use; not cleared for rehosting",
+      "rights_status_default": "unknown",
+      "supports": [
+        "aggregate market trend chart; page identifies CIAN as price-data source"
+      ],
+      "does_not_support": [
+        "offer-level price rows in an authorized downloadable format"
+      ],
+      "evidence": "Official page credits CIAN for primary-market price series. Official content-use terms require prior agreement with the Analytical Center; no reuse is presumed.",
+      "reviewed_at": "2026-10-09"
+    }
+  ],
+  "criteria": [
+    {
+      "key": "offer.price_total_rub",
+      "type": "integer|null",
+      "unit": "RUB",
+      "scope": "offer",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed_or_entitled_api; YRL only when currency is RUB/RUR and price unit is total; bnMAP price is asking/price-list evidence",
+      "evidence": "YRL price.value plus currency/unit and optional discount.final-price; bnMAP price is documented as declared purchase budget. Keep conditional discounts as separate conditional price evidence, not the base asking total.",
+      "unknown_policy": "unknown if absent, nonnumeric, currency/unit unsupported, or rights not cleared; never use booking/transaction values as current asking price",
+      "refresh": "capture observed_at for every row; refresh on each authorized source snapshot; apply offer freshness cutoff from contracts",
+      "label_ru": "Цена квартиры, ₽"
+    },
+    {
+      "key": "offer.price_per_sqm_rub",
+      "type": "{numerator_rub:integer,denominator_sqm:decimal-string}|null",
+      "unit": "RUB/m2",
+      "scope": "offer",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "automatic_feasibility": "derived_only",
+      "evidence": "derive from eligible total RUB asking price and positive total area; bnMAP squarePrice and YRL area-priced value remain preserved as raw source fields and are not accepted as this canonical derived value",
+      "unknown_policy": "unknown unless both eligible inputs exist; derived value must be exact ratio and identify both source fields, their observed_at/provenance, and formula; do not calculate from conditional total unless explicitly requested as a separate field",
+      "refresh": "recompute whenever either input changes; retain input timestamps",
+      "label_ru": "Цена за м², ₽"
+    },
+    {
+      "key": "offer.purchase_methods",
+      "type": "array<cash|mortgage|installment>|null",
+      "unit": "enum",
+      "scope": "offer",
+      "filter_operators": [
+        "contains"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "not_documented_as_structured_field",
+      "evidence": "YRL deal-status describes sale/legal modality; free-form description may mention mortgage but is not a documented structured payment-method field",
+      "unknown_policy": "unknown unless an authorized structured source explicitly reports methods; never infer cash/mortgage/installment from deal-status, generic advertising text, or absence",
+      "refresh": "refresh with each authorized offer snapshot",
+      "label_ru": "Способы покупки"
+    },
+    {
+      "key": "unit.floor",
+      "type": "integer|null",
+      "unit": "floor",
+      "scope": "unit",
+      "filter_operators": [
+        "min",
+        "max",
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed_or_entitled_api",
+      "evidence": "YRL floor and bnMAP floor identify the floor of the offered lot",
+      "unknown_policy": "unknown if missing or invalid; do not infer from apartment number or building floors",
+      "refresh": "per offer snapshot",
+      "label_ru": "Этаж"
+    },
+    {
+      "key": "building.parking_type",
+      "type": "underground|surface|none|null",
+      "unit": "enum",
+      "scope": "building_or_complex",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "bnmap_get_prices",
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "partially_supported; authorized bnMAP project parking_type may map only after reviewed value mapping; YRL parking boolean is not a type",
+      "evidence": "bnMAP parking_type is at project scope. YRL parking is a boolean for presence of guarded parking, not underground/surface/none.",
+      "unknown_policy": "unknown unless source explicitly supplies a mapped parking type; YRL parking=false does not prove no parking; absence is not none",
+      "refresh": "on source revision; preserve source scope",
+      "label_ru": "Тип парковки"
+    },
+    {
+      "key": "unit.area_sqm",
+      "type": "decimal|null",
+      "unit": "m²",
+      "scope": "unit",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed_or_entitled_api; EISЖС exact schema gated",
+      "evidence": "YRL area.value/unit and bnMAP square are documented; EISЖС official summary describes premises area but exact fields are unverified",
+      "unknown_policy": "unknown for absent, invalid, or unrecognized units; preserve raw unit and source field",
+      "refresh": "per source revision/offer snapshot",
+      "label_ru": "Площадь, м²"
+    },
+    {
+      "key": "unit.renovation",
+      "type": "string|null",
+      "unit": "source vocabulary",
+      "scope": "unit_or_building",
+      "filter_operators": [
+        "equals",
+        "contains"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices"
+      ],
+      "automatic_feasibility": "supported_but_source_scope_must_be_preserved",
+      "evidence": "YRL renovation tag has documented finish options; bnMAP interior is documented as finishing type at the building where the lot is located, while decoration fields may be lot-level",
+      "unknown_policy": "unknown when omitted; do not map free text without a reviewed vocabulary; preserve source value and scope",
+      "refresh": "per source revision",
+      "label_ru": "Отделка"
+    },
+    {
+      "key": "unit.rooms",
+      "type": "integer|null",
+      "unit": "room",
+      "scope": "unit",
+      "filter_operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed_or_entitled_api; YRL omits rooms for studio",
+      "evidence": "YRL rooms is total room count but is not used for studios; bnMAP rooms is count; ЕИСЖС general official API note mentions premises rooms with exact schema gated",
+      "unknown_policy": "unknown for missing/studio unless source explicitly reports studio separately; never coerce missing studio count to zero",
+      "refresh": "per source revision/offer snapshot",
+      "label_ru": "Комнаты"
+    },
+    {
+      "key": "unit.balcony",
+      "type": "string|null",
+      "unit": "source vocabulary",
+      "scope": "unit",
+      "filter_operators": [
+        "equals",
+        "contains"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed",
+      "evidence": "YRL balcony values include balcony, loggia, and multiple balconies/loggias",
+      "unknown_policy": "unknown if absent; do not infer no balcony",
+      "refresh": "per offer snapshot",
+      "label_ru": "Балкон или лоджия"
+    },
+    {
+      "key": "unit.bathroom_count",
+      "type": "integer|null",
+      "unit": "bathroom",
+      "scope": "unit",
+      "filter_operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "partially_supported; only numeric bathroom-unit values directly provide count",
+      "evidence": "YRL bathroom-unit accepts either combined/separate type or a numeric count",
+      "unknown_policy": "unknown for omitted or type-only values; do not derive count from type",
+      "refresh": "per offer snapshot",
+      "label_ru": "Количество санузлов"
+    },
+    {
+      "key": "unit.bathroom_type",
+      "type": "combined|separate|null",
+      "unit": "enum",
+      "scope": "unit",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "partially_supported; only type-valued bathroom-unit directly provides type",
+      "evidence": "YRL bathroom-unit accepts совмещенный or раздельный, alternatively a numeric value",
+      "unknown_policy": "unknown for omitted or numeric-only values",
+      "refresh": "per offer snapshot",
+      "label_ru": "Тип санузла"
+    },
+    {
+      "key": "building.ceiling_height_m",
+      "type": "decimal|null",
+      "unit": "m",
+      "scope": "building",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed",
+      "evidence": "YRL ceiling-height is defined in metres",
+      "unknown_policy": "unknown if absent or invalid; do not substitute a floorplan estimate",
+      "refresh": "on building source revision",
+      "label_ru": "Высота потолка, м"
+    },
+    {
+      "key": "unit.window_view",
+      "type": "string|null",
+      "unit": "source vocabulary",
+      "scope": "unit",
+      "filter_operators": [
+        "equals",
+        "contains"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed",
+      "evidence": "YRL window-view values include courtyard, street, or both",
+      "unknown_policy": "unknown if absent; do not infer from map orientation",
+      "refresh": "per offer snapshot",
+      "label_ru": "Вид из окна"
+    },
+    {
+      "key": "building.elevator_count",
+      "type": "integer|null",
+      "unit": "elevator",
+      "scope": "building",
+      "filter_operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "not_documented_as_count; YRL only supports lift presence",
+      "evidence": "YRL lift is a boolean presence field; it has no elevator count",
+      "unknown_policy": "unknown unless an authorized source provides explicit count; never convert lift=true to 1",
+      "refresh": "on building source revision",
+      "label_ru": "Количество лифтов"
+    },
+    {
+      "key": "building.lift_present",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_as_presence_only; not a lift count",
+      "evidence": "YRL lift is a yes/no presence field",
+      "unknown_policy": "unknown if omitted or invalid; preserve explicit false; never infer a count",
+      "refresh": "on building source revision",
+      "label_ru": "Лифт есть"
+    },
+    {
+      "key": "building.freight_elevator_count",
+      "type": "integer|null",
+      "unit": "elevator",
+      "scope": "building",
+      "filter_operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "not_documented",
+      "evidence": "Reviewed YRL new-build building fields document only lift presence, not passenger/freight counts or types",
+      "unknown_policy": "unknown unless explicitly supplied by an authorized structured source",
+      "refresh": "on building source revision",
+      "label_ru": "Грузовые лифты"
+    },
+    {
+      "key": "building.closed_territory",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_from_authorized_feed",
+      "evidence": "YRL guarded-building is explicitly defined as closed territory and supports yes/no values",
+      "unknown_policy": "unknown if tag missing or unparsable; preserve explicit false; do not treat security staff as equivalent",
+      "refresh": "on building source revision",
+      "label_ru": "Закрытая территория"
+    },
+    {
+      "key": "building.guarded_parking_present",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "supported_as_guarded_parking_presence_only; not a parking type",
+      "evidence": "YRL parking is presence of guarded parking; false does not establish that all parking is absent",
+      "unknown_policy": "unknown if omitted or invalid; preserve explicit false; do not map false to parking_type=none",
+      "refresh": "on building source revision",
+      "label_ru": "Охраняемая парковка есть"
+    },
+    {
+      "key": "complex.playground_onsite",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "complex_or_building",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [],
+      "automatic_feasibility": "not_documented_in_reviewed_structured_sources",
+      "evidence": "No reviewed YRL or bnMAP field establishes an onsite playground; marketing text/map context is not structured evidence",
+      "unknown_policy": "unknown until an authorized source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available",
+      "label_ru": "Детская площадка на территории"
+    },
+    {
+      "key": "building.cctv",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [],
+      "automatic_feasibility": "not_documented_in_reviewed_structured_sources",
+      "evidence": "No reviewed new-build structured field specifically documents CCTV",
+      "unknown_policy": "unknown unless an authorized structured source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available",
+      "label_ru": "Видеонаблюдение"
+    },
+    {
+      "key": "building.concierge",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [],
+      "automatic_feasibility": "not_documented_in_reviewed_structured_sources",
+      "evidence": "No reviewed new-build structured field specifically documents concierge service",
+      "unknown_policy": "unknown unless an authorized structured source explicitly confirms presence or absence",
+      "refresh": "manual/source revision review when a structured source becomes available",
+      "label_ru": "Консьерж"
+    },
+    {
+      "key": "building.security",
+      "type": "boolean|null",
+      "unit": "boolean",
+      "scope": "building_or_complex",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl"
+      ],
+      "automatic_feasibility": "not_documented_as_security_service; YRL guarded-building only describes closed territory",
+      "evidence": "YRL guarded-building means closed territory and is not equivalent to security staff/service",
+      "unknown_policy": "unknown unless a source explicitly documents building security; do not map closed territory to security",
+      "refresh": "on authorized source revision",
+      "label_ru": "Охрана"
+    },
+    {
+      "key": "building.apartments_per_floor",
+      "type": "integer|null",
+      "unit": "apartment/floor",
+      "scope": "building_section",
+      "filter_operators": [
+        "equals",
+        "min",
+        "max"
+      ],
+      "sources": [
+        "bnmap_get_prices"
+      ],
+      "automatic_feasibility": "not_supported_by_numInPlatform; requires explicit floor inventory/count field",
+      "evidence": "bnMAP numInPlatform is documented as the lot number on a floor, not total apartment count on that floor",
+      "unknown_policy": "unknown unless source explicitly provides a count; never infer from a lot's sequence number",
+      "refresh": "on floor-inventory source revision",
+      "label_ru": "Квартир на этаже"
+    },
+    {
+      "key": "complex.internet_providers",
+      "type": "array<string>|null",
+      "unit": "provider name",
+      "scope": "complex_or_building",
+      "filter_operators": [
+        "contains"
+      ],
+      "sources": [],
+      "automatic_feasibility": "not_documented_in_reviewed_sources",
+      "evidence": "No reviewed structured new-build YRL or bnMAP price-list field lists providers",
+      "unknown_policy": "unknown unless an authorized, dated structured provider source supplies the list; preserve empty list only when explicit",
+      "refresh": "refresh when the provider source revision changes",
+      "label_ru": "Интернет-провайдеры"
+    },
+    {
+      "key": "unit.stove_type",
+      "type": "gas|electric|null",
+      "unit": "enum",
+      "scope": "unit_or_building",
+      "filter_operators": [
+        "equals"
+      ],
+      "sources": [],
+      "automatic_feasibility": "not_documented_in_reviewed_new_build_sources",
+      "evidence": "No reviewed YRL or bnMAP price-list field describes the installed stove type",
+      "unknown_policy": "unknown unless an authorized structured source explicitly reports type; do not infer from utility/gas connection",
+      "refresh": "on source revision",
+      "label_ru": "Тип плиты"
+    },
+    {
+      "key": "building.construction_start_year",
+      "type": "integer|null",
+      "unit": "year",
+      "scope": "building",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "automatic_feasibility": "not_directly_supported_by_reviewed_fields",
+      "evidence": "bnMAP start_sales is sales start, not construction start; reviewed YRL completion fields do not specify construction start; EISЖС may contain project declarations but exact field unverified",
+      "unknown_policy": "unknown unless an authorized source explicitly reports construction start date/year; never relabel sales start",
+      "refresh": "when project declaration/source revision changes",
+      "label_ru": "Год начала строительства"
+    },
+    {
+      "key": "building.expected_completion_year",
+      "type": "integer|null",
+      "unit": "year",
+      "scope": "building",
+      "filter_operators": [
+        "min",
+        "max"
+      ],
+      "sources": [
+        "yandex_newbuild_yrl",
+        "bnmap_get_prices",
+        "eiszh_api"
+      ],
+      "automatic_feasibility": "supported_with_semantic_mapping_from_authorized_source",
+      "evidence": "YRL built-year/ready-quarter describe building handover/completion and key-handover-date is distinct; bnMAP dsc is planned commissioning date; EISЖС may contain handover data but exact field gated",
+      "unknown_policy": "unknown when date absent/invalid; retain quarter/date precision and do not confuse key handover with commissioning",
+      "refresh": "per source revision; update expected dates when new source snapshot appears",
+      "label_ru": "Ожидаемый год окончания строительства"
+    },
+    {
+      "key": "building.energy_class",
+      "type": "A|B|C|D|E|F|G|string|null",
+      "unit": "class",
+      "scope": "building",
+      "filter_operators": [
+        "equals",
+        "in"
+      ],
+      "sources": [
+        "eiszh_api"
+      ],
+      "automatic_feasibility": "access_gated_schema_unverified",
+      "evidence": "Official EISЖС API announcement confirms energy-efficiency information was added, but accessible public evidence does not confirm an exact energy_class field or class scale",
+      "unknown_policy": "unknown until the authorized specification confirms field, scale, scope, and rights; do not infer from general efficiency descriptions",
+      "refresh": "when authorized declaration/API revision changes",
+      "label_ru": "Класс энергоэффективности"
+    }
+  ],
+  "operational_boundaries": [
+    "Do not fetch credentials, scrape private areas, or parse user-facing descriptions into structured buyer payment or amenity fields.",
+    "Do not use Yandex TSV reference labels as current inventory or as evidence of a sale offer.",
+    "A source observation may be retained locally for audit only when permitted; redistribution/public display requires explicit rights clearance.",
+    "Demo fixtures must be unmistakably synthetic and may not be imported into real/public inventory."
+  ],
+  "data_access_findings": {
+    "reviewed_at": "2026-10-09",
+    "open_sources_with_current_unit_level_asking_prices_and_explicit_public_reuse_rights_found": 0,
+    "usable_open_sources_for_auxiliary_real_context": [
+      "minstroy_open_data",
+      "minstroy_price_benchmarks"
+    ],
+    "offer_price_gap": "No reviewed source currently provides both current unit-level asking-price rows and explicit rights for public rehosting in this application. Do not synthesize an Offer from aggregate benchmarks. Obtain an authorized developer feed/API agreement or a documented commercial license before importing real offers.",
+    "access_paths": [
+      {
+        "source_id": "eiszh_api",
+        "path": "Apply as a legal entity for the commercial EISZhS REST API at https://наш.дом.рф/api-еисжс or https://наш.дом.рф/интеграция; official contact nash@domrf.ru. Request current field specification, permitted storage/public display, attribution, and rights for structured apartment/project fields. No message sent.",
+        "fields_of_interest": [
+          "offer/price if available",
+          "premises area/rooms",
+          "building characteristics",
+          "handover dates",
+          "energy-efficiency/class field"
+        ],
+        "status": "not_requested; contract and exact schema unavailable"
+      },
+      {
+        "source_id": "bnmap_get_prices",
+        "path": "Obtain an entitled account and personal pbi token from bnMAP; API docs require pbi and support test=true limited to 10 rows. Do not put token in CLI/logs; no token present.",
+        "fields_of_interest": [
+          "lot price/area/floor/rooms",
+          "price-list observation",
+          "project parking_type",
+          "planned commissioning date"
+        ],
+        "status": "not_requested; no entitlement/token"
+      },
+      {
+        "source_id": "yandex_newbuild_yrl",
+        "path": "Acquire feed directly from a participating developer with explicit rights to process/store/display the fields; YRL documentation is a publisher-feed specification, not permission to fetch another party feed.",
+        "fields_of_interest": [
+          "unit price/area/floor/rooms/renovation/balcony/bathroom/view",
+          "building ceiling/lift/closed-territory/completion fields"
+        ],
+        "status": "no authorized feed supplied"
+      }
+    ]
+  }
+}

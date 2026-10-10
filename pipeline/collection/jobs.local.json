@@ -1,0 +1,82 @@
+{
+  "version": "1",
+  "jobs": [
+    {
+      "job_id": "synthetic_developer_demo",
+      "kind": "developer_yrl_file",
+      "enabled": true,
+      "source_id": "synthetic_demo",
+      "data_mode": "demo",
+      "input_path": "sources/property/tests/fixtures/developer_feed.synthetic.xml",
+      "rights_path": "sources/property/tests/fixtures/rights.synthetic.json",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "max_bytes": 1048576,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "osm_poi_sample",
+      "kind": "osm_poi_file",
+      "enabled": true,
+      "source_id": "osm_overpass_central_moscow_sample_2026-10-09",
+      "data_mode": "public_sample",
+      "input_path": "data/social/osm_overpass_poi_raw.json",
+      "manifest_path": "data/social/poi_manifest.json",
+      "max_bytes": 1048576,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "overture_city_reference",
+      "kind": "city_parquet_reference",
+      "enabled": true,
+      "source_id": "overture_moscow_cityclipped_2026-09-23.1",
+      "data_mode": "public_sample",
+      "input_path": "data/city/overture_moscow_cityclipped_2026-09-23.1.parquet",
+      "manifest_path": "data/city/overture_moscow_cityclipped_2026-09-23.1.manifest.json",
+      "max_bytes": 268435456,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "synthetic_social_anchor",
+      "kind": "social_enrichment_fixture",
+      "enabled": true,
+      "source_id": "synthetic_social_anchor_pipeline_only",
+      "data_mode": "illustrative_fixture",
+      "input_path": "data/social/osm_overpass_poi_normalized.json",
+      "manifest_path": "data/social/poi_manifest.json",
+      "synthetic_anchor": [37.607, 55.754],
+      "max_bytes": 1048576,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "minstroy_construction_registry",
+      "kind": "minstroy_registry_xls",
+      "enabled": true,
+      "source_id": "minstroy_construction_permits",
+      "dataset_kind": "construction_permit",
+      "data_mode": "public_registry",
+      "input_path": "data/property/minstroy/raw/permits_2026-05-29.xls",
+      "manifest_path": "data/property/minstroy/source_manifest.json",
+      "max_bytes": 5242880,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "minstroy_commissioning_registry",
+      "kind": "minstroy_registry_xls",
+      "enabled": true,
+      "source_id": "minstroy_commissioning_permits",
+      "dataset_kind": "commissioning_permit",
+      "data_mode": "public_registry",
+      "input_path": "data/property/minstroy/raw/commissioning_2026-05-29.xls",
+      "manifest_path": "data/property/minstroy/source_manifest.json",
+      "max_bytes": 5242880,
+      "min_interval_seconds": 0
+    },
+    {
+      "job_id": "authorized_developer_feed",
+      "kind": "gated_external",
+      "enabled": false,
+      "requires_access": true,
+      "source_id": "unconfigured_developer_feed"
+    }
+  ]
+}
