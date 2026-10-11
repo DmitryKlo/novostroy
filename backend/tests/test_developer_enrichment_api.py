@@ -80,10 +80,24 @@ def example(monkeypatch: pytest.MonkeyPatch) -> tuple[dict, dict, str]:
              "prepared_bytes": len(prepared)}
     overlay = {"manifest": {"run_id": "developer-enrichment-v1-" + "e" * 16},
                "buildings": {
-                   NORTH: {"registry_id": NORTH, "visibility_eligible": True,
+                  NORTH: {"registry_id": NORTH, "visibility_eligible": True,
+                           "developer_display_name": "Level Group",
+                           "developer_display_basis": "aggregator_asserted_unverified",
+                           "developer_legal_name": None,
                            "district_id": "district:северный", "district_name": "Северный",
                            "okrug_id": "okrug:северный", "okrug_name": "Северный округ",
-                           "noise_index": 37},
+                           "noise_index": 37,
+                           "air_model": {
+                               "model_basis": "open_meteo_cams_europe_grid_cell_forecast",
+                               "sample_scope": "requested_district_candidate_point_to_returned_grid_cell",
+                               "measured_district_average": False,
+                               "forecast_at": datetime.now(timezone.utc).isoformat(),
+                               "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                               "data_stale_after_utc": (
+                                   datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                               "pm2_5_ug_m3": 10.0, "pm10_ug_m3": 20.0,
+                               "no2_ug_m3": 12.0,
+                               "returned_grid_center_lon_lat": [37.6, 55.7]}},
                    SOUTH: {"registry_id": SOUTH, "visibility_eligible": True,
                            "district_id": "district:южный", "district_name": "Южный",
                            "okrug_id": "okrug:южный", "okrug_name": "Южный округ",
@@ -102,7 +116,10 @@ def example(monkeypatch: pytest.MonkeyPatch) -> tuple[dict, dict, str]:
                "media_by_floor": {}}
     menu = {"manifest": {"run_id": UNIT_RUN},
             "buildings": {registry_id: {"registry_id": registry_id,
-                                        "total_floors": None,
+                                        "total_floors": 16 if registry_id == NORTH else None,
+                                        "total_floors_basis": (
+                                            "source_apartment_record_building_floors"
+                                            if registry_id == NORTH else None),
                                         "max_observed_unit_floor": 14,
                                         "source_section_total_floors": {}}
                           for registry_id in (NORTH, SOUTH)},
@@ -147,6 +164,81 @@ def test_district_noise_and_apartment_filter_share_one_unit(example: tuple[dict,
         _schema(schema, result)
     for result in (listing, mapped, points):
         assert "private-plan.png" not in json.dumps(result)
+
+
+def test_air_index_filter_has_same_house_and_menu_meaning(
+    example: tuple[dict, dict, str]
+) -> None:
+    _, menu, _ = example
+    kwargs = {"max_air_index": 30, "price_max_rub": 15_000_000, "rooms": 2}
+    listing = api.registry_buildings(query=None, status=None, kind=None,
+                                     limit=48, offset=0, **kwargs)
+    mapped = api.registry_map(query=None, status=None, kind=None, **kwargs)
+    points = json.loads(api.map_points(_request(), query=None, status=None,
+                                       kind=None, **kwargs).body)
+    assert [row["registry_id"] for row in listing["items"]] == [NORTH]
+    assert [row["registry_id"] for row in mapped["items"]] == [NORTH]
+    assert [row["registry_id"] for row in points["items"]] == [NORTH]
+    assert listing["facets"]["air_index_known_count"] == 1
+    assert listing["items"][0]["air_quality"]["internal_index"]["value"] == 30
+    assert listing["items"][0]["air_quality"]["internal_index"]["official_index"] is False
+    assert listing["items"][0]["developer_display_name"] == "Level Group"
+    assert listing["items"][0]["developer_display_basis"] == "aggregator_asserted_unverified"
+    assert listing["items"][0]["developer_legal_name"] is None
+    assert listing["items"][0]["total_floors"] == 16
+    assert listing["items"][0]["total_floors_basis"] == "source_apartment_record_building_floors"
+    assert listing["items"][0]["max_observed_unit_floor"] == 14
+    assert "source_identity" not in json.dumps(listing)
+    tree = api.developer_building_floors(NORTH, **kwargs)
+    assert tree["matching_units_total"] == 1
+    floor_id = tree["sections"][0]["floors"][0]["floor_id"]
+    floor = api.developer_building_floor(NORTH, floor_id, **kwargs)
+    units = api.developer_building_units(
+        NORTH, section_id=None, floor_id=floor_id, floor_known=None,
+        limit=48, offset=0, **kwargs)
+    detail = api.developer_building_unit(NORTH, units["items"][0]["unit_id"], **kwargs)
+    assert floor["matching_unit_count"] == units["total"] == 1
+    assert detail["unit_id"] == units["items"][0]["unit_id"]
+    for value in (listing, mapped, points, tree, floor, units, detail):
+        _schema({id(listing): "DeveloperRegistryListResult",
+                 id(mapped): "DeveloperRegistryMapResult",
+                 id(points): "DeveloperMapPointsResult",
+                 id(tree): "DeveloperFloorsResult",
+                 id(floor): "DeveloperFloorDetail",
+                 id(units): "DeveloperUnitsResult",
+                 id(detail): "DeveloperUnitDetail"}[id(value)], value)
+    assert api.registry_buildings(query=None, status=None, kind=None,
+                                  limit=48, offset=0,
+                                  max_air_index=29)["records_total"] == 0
+    with pytest.raises(HTTPException) as exc:
+        api.developer_building_floors(NORTH, max_air_index=29)
+    assert exc.value.status_code == 404
+    menu["enrichment"]["buildings"][NORTH]["air_model"]["data_stale_after_utc"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    assert api.registry_buildings(query=None, status=None, kind=None,
+                                  limit=48, offset=0,
+                                  max_air_index=100)["records_total"] == 0
+    assert api.registry_buildings(query=None, status=None, kind=None,
+                                  limit=48, offset=0)["records_total"] == 2
+    assert api.registry_buildings(query="Level Group", status=None, kind=None,
+                                  limit=48, offset=0)["records_total"] == 1
+
+
+def test_section_counts_do_not_invent_a_whole_building_total(
+    example: tuple[dict, dict, str]
+) -> None:
+    snapshot, menu, _ = example
+    menu["buildings"][SOUTH]["total_floors"] = None
+    menu["buildings"][SOUTH]["total_floors_basis"] = None
+    menu["buildings"][SOUTH]["source_section_total_floors"] = {
+        "1": [16], "2": [10]}
+    projected = api._developer_public_structure(snapshot["by_registry"][SOUTH], menu)
+    assert projected["total_floors"] is None
+    assert projected["section_floor_counts"] == [
+        {"section_label": "1", "total_floors": 16,
+         "total_floors_basis": "source_section_floor_count"},
+        {"section_label": "2", "total_floors": 10,
+         "total_floors_basis": "source_section_floor_count"}]
 
 
 def test_floor_and_detail_filters_reject_unrelated_unit(example: tuple[dict, dict, str]) -> None:

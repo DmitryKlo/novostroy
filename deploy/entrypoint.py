@@ -175,6 +175,7 @@ def preflight() -> dict[str, int | str]:
             "selected_model_run_id": selected_models["manifest"]["run_id"],
             "selected_models": len(selected_models["by_registry"]),
             "enrichment_run_id": (menu.get("enrichment") or {}).get("manifest", {}).get("run_id", "none"),
+            "overlay_run_id": (menu.get("overlay") or {}).get("manifest", {}).get("run_id", "none"),
             "routing_roads_sha256": routing["roads_sha256"],
             "routing_parks_sha256": routing["parks_sha256"]}
 

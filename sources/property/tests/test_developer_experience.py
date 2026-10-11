@@ -27,6 +27,14 @@ def enriched_pointer(unit: str, model: str, enrichment: str) -> dict:
     return value
 
 
+def overlay_pointer(unit: str, model: str, enrichment: str, overlay: str) -> dict:
+    value = enriched_pointer(unit, model, enrichment)
+    value.update({"schema_version": experience.POINTER_SCHEMA_V3,
+                  "overlay_run_id": overlay,
+                  "overlay_manifest_sha256": "e" * 64})
+    return value
+
+
 class DeveloperExperienceTest(unittest.TestCase):
     def test_atomic_cas_and_rollback_to_absent_pointer(self) -> None:
         with TemporaryDirectory() as directory:
@@ -82,6 +90,36 @@ class DeveloperExperienceTest(unittest.TestCase):
                                        expected_active_sha=previous_sha, base=base)
                 experience.rollback(expected_active_sha=experience.pointer_sha(base), base=base)
                 self.assertEqual(experience.pointer_sha(base), previous_sha)
+                self.assertEqual(verify.call_count, 3)
+
+    def test_v3_overlay_commit_rollback_restores_exact_v2(self) -> None:
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            v2 = enriched_pointer("units1", "models1", "enrichment1")
+            v3 = overlay_pointer("units1", "models1", "enrichment2", "overlay1")
+            with patch.object(experience, "_verify_bundle", side_effect=[v2, v3, v2]) as verify:
+                experience.publish(
+                    "map", "units1", "models1", enrichment_run_id="enrichment1",
+                    expected_enrichment_manifest_sha="d" * 64,
+                    expected_active_sha=experience.pointer_sha(base), base=base)
+                old_sha = experience.pointer_sha(base)
+                old_bytes = (base / "active.json").read_bytes()
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    experience.publish(
+                        "map", "units1", "models1", enrichment_run_id="enrichment2",
+                        expected_enrichment_manifest_sha="d" * 64,
+                        overlay_run_id="overlay1", expected_overlay_manifest_sha="e" * 64,
+                        expected_active_sha="0" * 64, base=base)
+                experience.publish(
+                    "map", "units1", "models1", enrichment_run_id="enrichment2",
+                    expected_enrichment_manifest_sha="d" * 64,
+                    overlay_run_id="overlay1", expected_overlay_manifest_sha="e" * 64,
+                    expected_active_sha=old_sha, base=base)
+                self.assertEqual(json.loads((base / "active.json").read_text())[
+                    "schema_version"], experience.POINTER_SCHEMA_V3)
+                experience.rollback(expected_active_sha=experience.pointer_sha(base), base=base)
+                self.assertEqual(experience.pointer_sha(base), old_sha)
+                self.assertEqual((base / "active.json").read_bytes(), old_bytes)
                 self.assertEqual(verify.call_count, 3)
 
 

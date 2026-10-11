@@ -23,6 +23,7 @@ from backend import developer_units as menu_reader
 from pipeline.build_tiles import enu_transform
 from sources.models.geometry import ModelMesh, polygon_parts
 from sources.property.developer_unit_media import _png_dimensions, _private_source
+from sources.property.developer_facade_styles import load_frozen_style_batch
 from sources.property.textured_model import textured_glb
 from sources.property.developer_map import (
     ROOT, _canonical, _checked_delivery, _checked_file, _file_sha, _fsync_dir,
@@ -77,7 +78,9 @@ def _corpora(path: Path, needed: set[tuple[str, str]]) -> dict[tuple[str, str], 
     return found
 
 
-def _model(point: dict[str, Any], floors: dict[str, Any], corpus: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
+def _model(point: dict[str, Any], floors: dict[str, Any], corpus: dict[str, Any],
+           *, style_png: bytes | None = None, style_id: str | None = None,
+           style_evidence_sha256: str | None = None) -> tuple[dict[str, Any], bytes]:
     total = floors.get("total_floors")
     height = floors.get("estimated_height_m")
     if (floors.get("registry_id") != point.get("registry_id") or
@@ -93,7 +96,16 @@ def _model(point: dict[str, Any], floors: dict[str, Any], corpus: dict[str, Any]
     mesh.add(polygon)
     if mesh.holes != sum(len(part.interiors) for part in polygon_parts(polygon)):
         raise ValueError("Mesh courtyard differs from the source footprint")
-    blob = mesh.to_glb()
+    if style_png is not None:
+        if not style_id or not style_evidence_sha256:
+            raise ValueError("Styled model lacks exact project style evidence")
+        blob, style_metrics = textured_glb(
+            polygon, origin_lon, origin_lat, height, style_png,
+            texture_basis="generated_project_style_repeat_unoriented")
+    else:
+        if style_id is not None or style_evidence_sha256 is not None:
+            raise ValueError("Style identity without a prepared project texture")
+        blob, style_metrics = mesh.to_glb(), {}
     if len(blob) > MAX_ASSET_BYTES:
         raise ValueError("Selected model GLB exceeds 20 MB")
     asset_sha = _sha(blob)
@@ -111,6 +123,16 @@ def _model(point: dict[str, Any], floors: dict[str, Any], corpus: dict[str, Any]
         "render_policy": "selected_only_no_global_overlay",
         "triangles": mesh.triangles, "courtyards": mesh.holes,
     }
+    if style_png is not None:
+        row.update({"model_quality": "project_style_inferred_schematic_reconstruction",
+                    "facade_style_basis": "project_style_inference",
+                    "style_id": style_id,
+                    "facade_style_evidence_sha256": style_evidence_sha256,
+                    "texture_basis": "generated_project_style_repeat_unoriented",
+                    "texture_sha256": _sha(style_png),
+                    "photo_facade_reconstruction": False,
+                    "source_project_id": point["publisher_project_id"],
+                    **style_metrics})
     return row, blob
 
 
@@ -169,9 +191,13 @@ def _lake_model(point: dict[str, Any], floors: dict[str, Any],
 
 def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
           lake_osm_path: Path | None = None, lake_texture_path: Path | None = None,
-          output_root: Path = OUTPUT) -> dict[str, Any]:
+          output_root: Path = OUTPUT,
+          style_batch_path: Path | None = None,
+          base_model_run_id: str | None = None) -> dict[str, Any]:
     if (lake_osm_path is None) != (lake_texture_path is None):
         raise ValueError("Lake OSM footprint and generated texture must be supplied together")
+    if (style_batch_path is None) != (base_model_run_id is None):
+        raise ValueError("A style batch requires the exact unstyled baseline model run")
     delivery, _, delivery_sha = _checked_delivery(delivery_manifest)
     corpus_path = _checked_file(delivery_manifest.parent, delivery["files"], "projects_corpora")
     map_run = map_reader.load_staged(map_run_id)
@@ -194,10 +220,30 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
         needed.add(key)
         selected.append((point, floors, key))
     corpora = _corpora(corpus_path, needed)
+    style_batch = (load_frozen_style_batch(style_batch_path)
+                   if style_batch_path is not None else None)
+    styles_by_project = ({row["publisher_project_id"]: row
+                          for row in style_batch.material_rows}
+                         if style_batch is not None else {})
+    used_style_projects: set[str] = set()
     rows: list[dict[str, Any]] = []
     blobs: dict[str, bytes] = {}
     for point, floors, key in sorted(selected, key=lambda item: item[0]["registry_id"]):
-        row, blob = _model(point, floors, corpora[key])
+        material = styles_by_project.get(key[0])
+        if material is None:
+            row, blob = _model(point, floors, corpora[key])
+        else:
+            closer = next(item for item in material["lods"]
+                          if item["level"] == "closer")
+            row, blob = _model(
+                point, floors, corpora[key],
+                style_png=style_batch.textures[closer["asset_path"]],
+                style_id=material["style_id"],
+                style_evidence_sha256=material["source_evidence_sha256"],
+            )
+            if row["texture_sha256"] != closer["sha256"]:
+                raise ValueError("Selected model texture differs from its exact project material")
+            used_style_projects.add(key[0])
         old = blobs.setdefault(row["asset_sha256"], blob)
         if old != blob:
             raise ValueError("Content-addressed GLB collision")
@@ -211,7 +257,59 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
             raise ValueError("Textured selected-model content collision")
         rows.append(row)
     rows.sort(key=lambda item: item["registry_id"])
+    baseline_sha: str | None = None
+    if base_model_run_id is not None:
+        baseline_path = output_root / "runs" / base_model_run_id
+        baseline_manifest_path = baseline_path / "manifest.json"
+        if baseline_path.is_symlink() or baseline_manifest_path.is_symlink():
+            raise ValueError("Untrusted baseline model run path")
+        baseline_manifest = json.loads(baseline_manifest_path.read_text(encoding="utf-8"))
+        if (baseline_manifest.get("run_id") != base_model_run_id or
+                baseline_manifest.get("map_run_id") != map_run_id or
+                baseline_manifest.get("menu_run_id") != menu_run_id or
+                baseline_manifest.get("delivery_manifest_sha256") != delivery_sha or
+                baseline_manifest.get("models_sha256") != _file_sha(baseline_path / "models.jsonl")):
+            raise ValueError("Styled model baseline is not pinned to the same sources")
+        baseline_rows = {row["registry_id"]: row for row in _rows(baseline_path / "models.jsonl")}
+        if set(baseline_rows) != {row["registry_id"] for row in rows}:
+            raise ValueError("Styled model changes the selected building set")
+        invariant_fields = ("model_transform", "height_m", "height_basis",
+                            "source_total_floors", "source_section_total_floors",
+                            "source_geometry_basis", "source_geometry_evidence_sha256",
+                            "source_observed_at", "depiction", "render_policy",
+                            "triangles", "courtyards")
+        for row in rows:
+            baseline = baseline_rows[row["registry_id"]]
+            if any(row.get(field) != baseline.get(field) for field in invariant_fields):
+                raise ValueError("Facade style changed source geometry or height evidence")
+            if "style_id" not in row and row != baseline:
+                raise ValueError("Unstyled selected model changed during facade staging")
+        baseline_sha = _file_sha(baseline_manifest_path)
     payload = b"".join(_canonical(row) + b"\n" for row in rows)
+    used_materials = sorted((styles_by_project[project_id]
+                             for project_id in used_style_projects),
+                            key=lambda row: row["publisher_project_id"])
+    materials_payload = b"".join(_canonical(row) + b"\n" for row in used_materials)
+    style_blobs: dict[str, bytes] = {}
+    texture_inventory: list[dict[str, Any]] = []
+    for material in used_materials:
+        for lod in material["lods"]:
+            sha = lod["sha256"]
+            source_path = lod["asset_path"]
+            png = style_batch.textures[source_path]
+            if _sha(png) != sha:
+                raise ValueError("Selected style texture failed content hash check")
+            old = style_blobs.setdefault(sha, png)
+            if old != png:
+                raise ValueError("Content-addressed style texture collision")
+            texture_inventory.append({
+                "style_id": material["style_id"], "level": lod["level"],
+                "path": f"styles/{source_path}", "sha256": sha,
+                "bytes": len(png),
+            })
+    texture_inventory.sort(key=lambda row: (row["style_id"], row["level"]))
+    texture_inventory_payload = b"".join(_canonical(row) + b"\n"
+                                         for row in texture_inventory)
     inputs = {"delivery_manifest_sha256": delivery_sha,
               "corpus_source_sha256": _file_sha(corpus_path),
               "map_run_id": map_run_id,
@@ -222,10 +320,18 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
               "lake_osm_sha256": (_file_sha(_private_source(str(lake_osm_path)))
                                   if lake_osm_path is not None else None),
               "lake_generated_texture_sha256": (LAKE_TEXTURE_SHA
-                                                  if lake_texture_path is not None else None)}
+                                                  if lake_texture_path is not None else None),
+              "style_batch_manifest_sha256": (_file_sha(Path(style_batch_path)
+                                                           if Path(style_batch_path).name == "manifest.json"
+                                                           else Path(style_batch_path) / "manifest.json")
+                                               if style_batch_path is not None else None),
+              "base_model_run_id": base_model_run_id,
+              "base_model_manifest_sha256": baseline_sha}
     run_hash = _sha(_canonical({"rules": RULES, "inputs": inputs,
                                "models_sha256": _sha(payload),
-                               "assets": sorted(blobs)}))
+                               "assets": sorted(blobs),
+                               "styles_materials_sha256": _sha(materials_payload),
+                               "styles_texture_inventory_sha256": _sha(texture_inventory_payload)}))
     run_id = "developer-models-v1-" + run_hash[:16]
     manifest = {"schema_version": "developer-models-snapshot/1", "rules_version": RULES,
                 "run_id": run_id, **inputs,
@@ -234,7 +340,13 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
                 "height_basis": HEIGHT_BASIS,
                 "depiction": "schematic_massing", "render_policy": "selected_only_no_global_overlay",
                 "rights_status": "unknown",
-                "photo_facade_reconstruction": lake_texture_path is not None}
+                "photo_facade_reconstruction": lake_texture_path is not None,
+                "styles_materials_sha256": _sha(materials_payload),
+                "styles_materials_total": len(used_materials),
+                "styles_texture_inventory_sha256": _sha(texture_inventory_payload),
+                "styles_textures_total": len(texture_inventory),
+                "styles_texture_files_total": len(style_blobs),
+                "styled_models_total": sum("style_id" in row for row in rows)}
     output_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     runs = output_root / "runs"
     runs.mkdir(exist_ok=True, mode=0o700)
@@ -243,7 +355,12 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
     if target.exists():
         if (target.is_symlink() or (target / "manifest.json").read_bytes() != manifest_bytes or
                 (target / "models.jsonl").read_bytes() != payload or
-                any(_file_sha(target / "assets" / (sha + ".glb")) != sha for sha in blobs)):
+                any(_file_sha(target / "assets" / (sha + ".glb")) != sha for sha in blobs) or
+                (style_batch is not None and
+                 ((target / "styles/materials.jsonl").read_bytes() != materials_payload or
+                  (target / "styles/texture-inventory.jsonl").read_bytes() != texture_inventory_payload or
+                  any(_file_sha(target / "styles/textures" / (sha + ".png")) != sha
+                      for sha in style_blobs)))):
             raise ValueError("Immutable selected-model run ID collision")
         return manifest
     stage = Path(tempfile.mkdtemp(prefix=".stage-developer-models-", dir=runs))
@@ -253,6 +370,17 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
         assets.mkdir(mode=0o700)
         for sha, blob in blobs.items():
             _write_private(assets / (sha + ".glb"), blob)
+        if style_batch is not None:
+            styles = stage / "styles"
+            styles.mkdir(mode=0o700)
+            textures = styles / "textures"
+            textures.mkdir(mode=0o700)
+            for sha, png in style_blobs.items():
+                _write_private(textures / (sha + ".png"), png)
+            _write_private(styles / "materials.jsonl", materials_payload)
+            _write_private(styles / "texture-inventory.jsonl", texture_inventory_payload)
+            _fsync_dir(textures)
+            _fsync_dir(styles)
         _write_private(stage / "models.jsonl", payload)
         _write_private(stage / "manifest.json", manifest_bytes)
         _fsync_dir(assets)
@@ -261,12 +389,8 @@ def build(delivery_manifest: Path, map_run_id: str, menu_run_id: str,
         _fsync_dir(runs)
     finally:
         if stage.exists():
-            for path in (stage / "assets").glob("*"):
-                path.unlink()
-            (stage / "assets").rmdir()
-            for path in stage.iterdir():
-                path.unlink()
-            stage.rmdir()
+            import shutil
+            shutil.rmtree(stage)
     if map_reader.resolve_active()["manifest"]["run_id"] != map_run_id:
         raise ValueError("Map pointer changed during selected-model build")
     return manifest
@@ -282,9 +406,12 @@ def main() -> None:
     build_cmd.add_argument("--menu-run-id", required=True)
     build_cmd.add_argument("--lake-osm-path", type=Path)
     build_cmd.add_argument("--lake-texture-path", type=Path)
+    build_cmd.add_argument("--style-batch-path", type=Path)
+    build_cmd.add_argument("--base-model-run-id")
     args = parser.parse_args()
     print(json.dumps(build(args.delivery_manifest, args.map_run_id, args.menu_run_id,
-                           args.lake_osm_path, args.lake_texture_path, args.output_root),
+                           args.lake_osm_path, args.lake_texture_path, args.output_root,
+                           args.style_batch_path, args.base_model_run_id),
                      ensure_ascii=False, sort_keys=True))
 
 

@@ -26,6 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from deploy.entrypoint import ROUTING_INPUT_FILES, verify_routing_inputs
+from scripts.runtime_overlay import developer_overlay_files
 MODEL_RUN_RE = re.compile(r"models-v1-[0-9a-f]{16}")
 DEVELOPER_RUN_RE = re.compile(r"developer-map-v1-[0-9a-f]{16}")
 DEVELOPER_SNAPSHOT_RE = re.compile(r"developer-map-snapshot-[0-9a-f]{16}")
@@ -148,10 +149,13 @@ def developer_experience_files(source_root: Path) -> list[str]:
         "unit_run_id", "unit_manifest_sha256", "model_run_id", "model_manifest_sha256",
     }
     version = pointer.get("schema_version")
-    if version == "developer-experience-pointer/2":
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         expected_keys |= {"enrichment_run_id", "enrichment_manifest_sha256"}
+    if version == "developer-experience-pointer/3":
+        expected_keys |= {"overlay_run_id", "overlay_manifest_sha256"}
     if (set(pointer) != expected_keys
-            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2"}):
+            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2",
+                               "developer-experience-pointer/3"}):
         raise ValueError("Invalid active developer-experience pointer")
     identity_patterns = {
         "map_run_id": DEVELOPER_RUN_RE,
@@ -170,7 +174,8 @@ def developer_experience_files(source_root: Path) -> list[str]:
     # exactly, while menu and selected models have no independent active files.
     for stale_pointer in ("data/property/developer_units/active.json",
                           "data/property/developer_models/active.json",
-                          "data/property/developer_enrichment/active.json"):
+                          "data/property/developer_enrichment/active.json",
+                          "data/property/developer_overlay/active.json"):
         if (source_root / stale_pointer).exists() or (source_root / stale_pointer).is_symlink():
             raise ValueError("Separate unit/model active pointers are not accepted")
     developer_map_files(source_root)
@@ -300,8 +305,12 @@ def developer_experience_files(source_root: Path) -> list[str]:
                     or int.from_bytes(header[8:12], "little") != row["asset_bytes"]):
                 raise ValueError("Selected model asset is not a complete GLB")
             relatives.append(relative)
-    if version == "developer-experience-pointer/2":
+    from scripts.runtime_model_styles import developer_model_style_files
+    relatives.extend(developer_model_style_files(source_root, model_prefix, model_manifest))
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         relatives.extend(developer_enrichment_files(source_root, pointer))
+    if version == "developer-experience-pointer/3":
+        relatives.extend(developer_overlay_files(source_root, pointer))
     return relatives
 
 

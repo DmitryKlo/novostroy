@@ -138,6 +138,14 @@ test('probe cap cannot restart on the same pose and quality, but a new epoch can
   assert.equal(attempts.claim(2, 'flat', 'camera_settled'), true)
 })
 
+test('camera interruption can retry once, but completed probes cannot loop on the same pose', () => {
+  const attempts = new ProbeAttemptLedger()
+  assert.equal(attempts.claim(3, 'flat', 'ground_frame_ready'), true)
+  attempts.releaseInterrupted(3, 'flat', 'ground_frame_ready')
+  assert.equal(attempts.claim(3, 'flat', 'camera_settled'), true)
+  assert.equal(attempts.claim(3, 'flat', 'camera_settled'), false)
+})
+
 test('stress retry requires a meaningful camera or viewport change', () => {
   const pose = { x: 0, y: 0, z: 0, height: 5000, heading: 0, pitch: -1, width: 390, canvasHeight: 844 }
   assert.equal(meaningfulViewChange(pose, { ...pose, x: 20, height: 5010 }), false)
@@ -171,11 +179,14 @@ test('active flat and 3D frame windows progressively earn detail without credit 
   assert.equal(quality.observeWindow({ ...good, visible: false }).stage, 'flat')
   assert.equal(quality.observeWindow({ ...good, moving: true }).stage, 'flat')
   assert.equal(quality.observeWindow(good).stage, 'flat')
-  assert.equal(quality.observeWindow(good).stage, 'coarse')
-  assert.equal(citySseForQuality(quality.stage), 128)
+  assert.equal(quality.observeWindow(good).stage, 'silhouette')
+  assert.equal(citySseForQuality(quality.stage), 16_384)
   assert.equal(qualityAllows('city_volumes', quality.stage), true)
   assert.equal(qualityAllows('facade', quality.stage), false)
-  assert.equal(quality.observeWindow({ ...good, contentReady: false }).stage, 'coarse')
+  assert.equal(quality.observeWindow({ ...good, contentReady: false }).stage, 'silhouette')
+  assert.equal(quality.observeWindow(good).stage, 'silhouette')
+  assert.equal(quality.observeWindow(good).stage, 'coarse')
+  assert.equal(citySseForQuality(quality.stage), 128)
   assert.equal(quality.observeWindow(good).stage, 'coarse')
   assert.equal(quality.observeWindow(good).stage, 'balanced')
   assert.equal(citySseForQuality(quality.stage), 64)
@@ -189,22 +200,36 @@ test('active flat and 3D frame windows progressively earn detail without credit 
   assert.deepEqual(tilesToRequest(legacyLayers, false, true).filter((tile) => qualityAllows(tile.kind, 'flat')).map((tile) => tile.kind), ['roads', 'parks'])
 })
 
+test('moderate flat frames earn only regional silhouettes; sustained stress still sheds them', () => {
+  const quality = new AdaptiveQuality()
+  const moderate = { samples: Array(10).fill(45), activeProbe: true, visible: true, moving: false, contentReady: true }
+  quality.observeWindow(moderate)
+  assert.equal(quality.observeWindow(moderate).stage, 'silhouette')
+  quality.observeWindow(moderate)
+  assert.equal(quality.observeWindow(moderate).stage, 'silhouette', 'closer city detail retains the stricter budget')
+  const stressed = { ...moderate, samples: Array(10).fill(55) }
+  assert.equal(quality.observeWindow(stressed).stage, 'flat')
+  assert.equal(quality.locked, true)
+})
+
 test('stress sheds detail or 3D and cannot oscillate back without a meaningful view change', () => {
   const quality = new AdaptiveQuality()
   const good = { samples: Array(10).fill(20), activeProbe: true, visible: true, moving: false, contentReady: true }
-  for (let index = 0; index < 6; index++) quality.observeWindow(good)
+  for (let index = 0; index < 8; index++) quality.observeWindow(good)
   assert.equal(quality.stage, 'detail')
   const slow = { ...good, samples: [20, 20, 20, 20, 20, 20, 55, 55, 55, 55] }
   assert.equal(quality.observeWindow(slow).stage, 'coarse')
   for (let index = 0; index < 4; index++) quality.observeWindow(good)
   assert.equal(quality.stage, 'coarse')
+  assert.equal(quality.observeWindow(slow).stage, 'silhouette')
+  assert.equal(quality.locked, false)
   assert.equal(quality.observeWindow(slow).stage, 'flat')
   assert.equal(quality.locked, true)
   for (let index = 0; index < 4; index++) quality.observeWindow(good)
   assert.equal(quality.stage, 'flat')
   quality.onMeaningfulChange()
   assert.equal(quality.observeWindow(good).stage, 'flat')
-  assert.equal(quality.observeWindow(good).stage, 'coarse')
+  assert.equal(quality.observeWindow(good).stage, 'silhouette')
   assert.equal(quality.observeFrame(120, true), false)
   assert.equal(quality.observeFrame(120, true), true)
   assert.equal(quality.stage, 'flat')
@@ -220,7 +245,7 @@ test('two intermittent long frames in ten are caught even when p75 looks smooth'
   const good = { samples: Array(10).fill(20), activeProbe: true, visible: true, moving: false, contentReady: true }
   quality.observeWindow(good)
   quality.observeWindow(good)
-  assert.equal(quality.stage, 'coarse')
+  assert.equal(quality.stage, 'silhouette')
   const janky = quality.observeWindow({ ...good, samples: [20, 65, 20, 20, 20, 20, 65, 20, 20, 20] })
   assert.equal(janky.p75, 20)
   assert.equal(janky.stage, 'flat')

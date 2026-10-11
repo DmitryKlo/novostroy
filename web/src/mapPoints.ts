@@ -1,5 +1,6 @@
 import type { MapMarker, MapPoint, MapPointsResult } from './api'
 import type { MapPointDisplayItem, ProvenMapPointGroup } from './mapPointGroups'
+import { developerDisplayCaption } from './developerBuildingFacts'
 
 const validLocation = (point: MapPoint): boolean => point.location.length === 2
   && Number.isFinite(point.location[0]) && Number.isFinite(point.location[1])
@@ -67,7 +68,7 @@ export function pointComplexCardCaption(point: MapPoint, group: ProvenMapPointGr
 
 export function pointDeveloperCardCaption(point: MapPoint): string | null {
   return point.point_type === 'developer_building'
-    ? `Застройщик: ${point.developer_name || 'не указан'}` : null
+    ? developerDisplayCaption(point) : null
 }
 
 export function pointRegistryLinkCaption(point: MapPoint, group: ProvenMapPointGroup | null): string | null {

@@ -2373,7 +2373,14 @@
         "noise_index",
         "air_quality",
         "media",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "total_floors",
+        "total_floors_basis",
+        "max_observed_unit_floor",
+        "developer_display_name",
+        "developer_display_basis",
+        "developer_legal_name",
+        "section_floor_counts"
       ],
       "properties": {
         "registry_id": {
@@ -2541,6 +2548,57 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "total_floors": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "total_floors_basis": {
+          "enum": [
+            "source_apartment_record_building_floors",
+            "source_building",
+            null
+          ]
+        },
+        "max_observed_unit_floor": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "developer_display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "developer_display_basis": {
+          "enum": [
+            "aggregator_asserted_unverified",
+            "first_party_source_brand",
+            "official_project_brand",
+            null
+          ]
+        },
+        "developer_legal_name": {
+          "type": "null"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
+        },
+        "section_floor_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperSectionFloorCount"
+          }
         }
       },
       "additionalProperties": false
@@ -2562,7 +2620,8 @@
         "items",
         "unit_run_id",
         "applied_filters",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -2612,7 +2671,8 @@
             "unlocated_count",
             "okrugs",
             "districts",
-            "noise_known_count"
+            "noise_known_count",
+            "air_index_known_count"
           ],
           "properties": {
             "developers": {
@@ -2684,6 +2744,10 @@
             "noise_known_count": {
               "type": "integer",
               "minimum": 0
+            },
+            "air_index_known_count": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -2710,6 +2774,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2727,7 +2798,8 @@
         "counts",
         "applied_filters",
         "unit_run_id",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -2816,6 +2888,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -2847,7 +2926,14 @@
         "noise_index",
         "air_quality",
         "media",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "total_floors",
+        "total_floors_basis",
+        "max_observed_unit_floor",
+        "developer_display_name",
+        "developer_display_basis",
+        "developer_legal_name",
+        "section_floor_counts"
       ],
       "properties": {
         "registry_id": {
@@ -2970,6 +3056,57 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "total_floors": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "total_floors_basis": {
+          "enum": [
+            "source_apartment_record_building_floors",
+            "source_building",
+            null
+          ]
+        },
+        "max_observed_unit_floor": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "developer_display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        },
+        "developer_display_basis": {
+          "enum": [
+            "aggregator_asserted_unverified",
+            "first_party_source_brand",
+            "official_project_brand",
+            null
+          ]
+        },
+        "developer_legal_name": {
+          "type": "null"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
+        },
+        "section_floor_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeveloperSectionFloorCount"
+          }
         }
       },
       "additionalProperties": false
@@ -2988,7 +3125,8 @@
         "group_evidence",
         "items",
         "unit_run_id",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "dataset_id": {
@@ -3120,6 +3258,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4002,7 +4147,7 @@
         },
         "url": {
           "type": "string",
-          "pattern": "^/assets/"
+          "pattern": "^(?:/assets/|/v1/developer-overlay/developer-overlay-v1-[a-f0-9]{16}/city-patch/tileset\\.json$)"
         },
         "kind": {
           "enum": [
@@ -4580,7 +4725,9 @@
         "matching_unassigned_unit_count",
         "matching_units_total",
         "applied_filters",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "total_floors_basis",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4651,6 +4798,20 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "total_floors_basis": {
+          "enum": [
+            "source_apartment_record_building_floors",
+            "source_building",
+            null
+          ]
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4752,7 +4913,8 @@
         "plan_regions",
         "hotspots",
         "media",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4849,6 +5011,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4865,7 +5034,8 @@
         "offset",
         "applied_filters",
         "items",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4912,6 +5082,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -4936,7 +5113,9 @@
         "geometry_attribution",
         "photo_facade_reconstruction",
         "texture_basis",
-        "enrichment_run_id"
+        "facade_style_basis",
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -4989,7 +5168,7 @@
         },
         "height_basis": {
           "enum": [
-            "source_floor_count_times_3m_estimate",
+            "source_total_floors_times_3m_estimate",
             "schematic_min_section_floors_times_3m_estimate",
             null
           ]
@@ -5034,7 +5213,14 @@
         },
         "texture_basis": {
           "enum": [
-            "generated_photo_informed_unoriented",
+            "generated_photo_informed_repeat_unoriented",
+            "generated_project_style_repeat_unoriented",
+            null
+          ]
+        },
+        "facade_style_basis": {
+          "enum": [
+            "project_style_inference",
             null
           ]
         },
@@ -5050,6 +5236,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -5079,7 +5272,8 @@
         "plans",
         "media",
         "observed_attributes",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -5231,6 +5425,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -5298,6 +5499,11 @@
           "maxLength": 100
         },
         "max_noise_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_air_index": {
           "type": "integer",
           "minimum": 0,
           "maximum": 100
@@ -5389,7 +5595,8 @@
         "boundary_gap_m",
         "access_verified",
         "origin_access",
-        "enrichment_run_id"
+        "enrichment_run_id",
+        "overlay_run_id"
       ],
       "properties": {
         "registry_snapshot_id": {
@@ -5519,6 +5726,13 @@
             "null"
           ],
           "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
         }
       },
       "additionalProperties": false
@@ -5544,7 +5758,8 @@
         "measurement",
         "measured_district_average",
         "data_credit",
-        "reason"
+        "reason",
+        "internal_index"
       ],
       "properties": {
         "status": {
@@ -5656,6 +5871,9 @@
             "no_district_model_sample",
             null
           ]
+        },
+        "internal_index": {
+          "$ref": "#/$defs/DeveloperAirIndex"
         }
       },
       "additionalProperties": false
@@ -5775,6 +5993,306 @@
         },
         "payment_terms_confirmed_unconditional": {
           "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperAirIndex": {
+      "type": "object",
+      "required": [
+        "status",
+        "value",
+        "scale_id",
+        "higher_is_worse",
+        "component_scores",
+        "dominant_pollutants",
+        "official_index",
+        "measurement",
+        "measured_district_average",
+        "valid_at",
+        "retrieved_at",
+        "stale_after",
+        "spatial_scope",
+        "grid_cell_center",
+        "cell_resolution_km_approx",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "modeled_forecast",
+            "stale",
+            "incomplete",
+            "unavailable"
+          ]
+        },
+        "value": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "scale_id": {
+          "const": "internal_3pollutant_0_100_v1"
+        },
+        "higher_is_worse": {
+          "const": true
+        },
+        "component_scores": {
+          "type": "object",
+          "required": [
+            "pm2_5",
+            "pm10",
+            "no2"
+          ],
+          "properties": {
+            "pm2_5": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            },
+            "pm10": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            },
+            "no2": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "dominant_pollutants": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "pm2_5",
+              "pm10",
+              "no2"
+            ]
+          }
+        },
+        "official_index": {
+          "const": false
+        },
+        "measurement": {
+          "const": false
+        },
+        "measured_district_average": {
+          "const": false
+        },
+        "valid_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "retrieved_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "stale_after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "spatial_scope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grid_cell_center": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LonLat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cell_resolution_km_approx": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperOverlayViewport": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "registry_snapshot_id",
+        "map_run_id",
+        "unit_run_id",
+        "enrichment_run_id",
+        "overlay_run_id",
+        "tileset_url",
+        "city_patch_url",
+        "lake_persistent",
+        "lake_registry_id",
+        "lake_persistent_model_sha256",
+        "facade_style",
+        "bbox",
+        "features_total",
+        "matched_total",
+        "limit",
+        "offset",
+        "truncated",
+        "eligible_registry_ids",
+        "applied_filters"
+      ],
+      "properties": {
+        "dataset_id": {
+          "const": "developer_source_geometry_overlay"
+        },
+        "registry_snapshot_id": {
+          "type": "string",
+          "pattern": "^developer-map-snapshot-[a-f0-9]{16}$"
+        },
+        "map_run_id": {
+          "type": "string",
+          "pattern": "^developer-map-v1-[a-f0-9]{16}$"
+        },
+        "unit_run_id": {
+          "type": "string",
+          "pattern": "^developer-units-v1-[a-f0-9]{16}$"
+        },
+        "enrichment_run_id": {
+          "type": "string",
+          "pattern": "^developer-enrichment-v1-[a-f0-9]{16}$"
+        },
+        "overlay_run_id": {
+          "type": "string",
+          "pattern": "^developer-overlay-v1-[a-f0-9]{16}$"
+        },
+        "tileset_url": {
+          "type": "string",
+          "pattern": "^/v1/developer-overlay/developer-overlay-v1-[a-f0-9]{16}/tileset\\.json$"
+        },
+        "city_patch_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lake_persistent": {
+          "type": "boolean"
+        },
+        "lake_registry_id": {
+          "type": ["string", "null"],
+          "pattern": "^registry-[a-f0-9]{24}$"
+        },
+        "lake_persistent_model_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "facade_style": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false,
+             "required": ["basis", "label", "styled_projects_total",
+                          "styled_persistent_features_total", "texture_level"],
+             "properties": {
+               "basis": {"const": "project_style_inference"},
+               "label": {"const": "Реконструкция"},
+               "styled_projects_total": {"type": "integer", "minimum": 1},
+               "styled_persistent_features_total": {"type": "integer", "minimum": 1},
+               "texture_level": {"const": "near"}
+             }}
+          ]
+        },
+        "bbox": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
+        "features_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matched_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1500
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "eligible_registry_ids": {
+          "type": "array",
+          "maxItems": 1500,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^registry-[a-f0-9]{24}$"
+          }
+        },
+        "applied_filters": {
+          "$ref": "#/$defs/DeveloperUnitAppliedFilters"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeveloperSectionFloorCount": {
+      "type": "object",
+      "required": [
+        "section_label",
+        "total_floors",
+        "total_floors_basis"
+      ],
+      "properties": {
+        "section_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "total_floors": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total_floors_basis": {
+          "const": "source_section_floor_count"
         }
       },
       "additionalProperties": false

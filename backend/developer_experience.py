@@ -9,7 +9,8 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any
 
-from backend import developer_enrichment, developer_map, developer_models, developer_units
+from backend import (developer_enrichment, developer_map, developer_models,
+                     developer_overlay, developer_units)
 from backend.store import ROOT
 
 
@@ -44,15 +45,21 @@ def resolve_active(map_run: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
                    "map_manifest_sha256", "unit_run_id", "unit_manifest_sha256",
                    "model_run_id", "model_manifest_sha256"}
     version = pointer.get("schema_version") if isinstance(pointer, dict) else None
+    v2_keys = common_keys | {"enrichment_run_id", "enrichment_manifest_sha256"}
+    v3_keys = v2_keys | {"overlay_run_id", "overlay_manifest_sha256"}
     expected_keys = (common_keys if version == "developer-experience-pointer/1"
-                     else common_keys | {"enrichment_run_id", "enrichment_manifest_sha256"})
+                     else v2_keys if version == "developer-experience-pointer/2"
+                     else v3_keys)
     if (not isinstance(pointer, dict) or set(pointer) != expected_keys or
-            version not in {"developer-experience-pointer/1", "developer-experience-pointer/2"} or
+            version not in {"developer-experience-pointer/1", "developer-experience-pointer/2",
+                            "developer-experience-pointer/3"} or
             any(not isinstance(pointer[key], str) or SHA_RE.fullmatch(pointer[key]) is None
                 for key in ("map_manifest_sha256", "unit_manifest_sha256",
                             "model_manifest_sha256") +
-                           (("enrichment_manifest_sha256",) if version ==
-                            "developer-experience-pointer/2" else ()))):
+                           (("enrichment_manifest_sha256",) if version !=
+                            "developer-experience-pointer/1" else ()) +
+                           (("overlay_manifest_sha256",) if version ==
+                            "developer-experience-pointer/3" else ()))):
         raise ValueError("Invalid developer experience pointer")
     map_manifest = map_run["manifest"]
     map_manifest_path = (developer_map.BASE / "runs" / map_manifest["run_id"] /
@@ -72,9 +79,14 @@ def resolve_active(map_run: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
             models["manifest"]["menu_manifest_sha256"] !=
             pointer["unit_manifest_sha256"]):
         raise ValueError("Experience model and apartment menu generations differ")
-    if version == "developer-experience-pointer/2":
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         overlay = developer_enrichment.load_staged(
             pointer["enrichment_run_id"], map_run, menu, models,
             expected_manifest_sha256=pointer["enrichment_manifest_sha256"])
         menu = {**menu, "enrichment": overlay}
+        if version == "developer-experience-pointer/3":
+            geometry = developer_overlay.load_staged(
+                pointer["overlay_run_id"], map_run, menu, models, overlay,
+                expected_manifest_sha256=pointer["overlay_manifest_sha256"])
+            menu = {**menu, "overlay": geometry}
     return menu, models

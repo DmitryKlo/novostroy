@@ -1,10 +1,10 @@
-export type MapQuality = 'flat' | 'coarse' | 'balanced' | 'detail'
+export type MapQuality = 'flat' | 'silhouette' | 'coarse' | 'balanced' | 'detail'
 
-const STAGES: MapQuality[] = ['flat', 'coarse', 'balanced', 'detail']
+const STAGES: MapQuality[] = ['flat', 'silhouette', 'coarse', 'balanced', 'detail']
 const rank = (stage: MapQuality) => STAGES.indexOf(stage)
 
 export function citySseForQuality(stage: MapQuality): number {
-  return stage === 'coarse' ? 128 : stage === 'balanced' ? 64 : 24
+  return stage === 'silhouette' ? 16_384 : stage === 'coarse' ? 128 : stage === 'balanced' ? 64 : 24
 }
 
 export function qualityAllows(kind: string, stage: MapQuality): boolean {
@@ -81,13 +81,20 @@ export class AdaptiveQuality {
     if (!visible || !Number.isFinite(intervalMs) || intervalMs <= 0) { this.severeFrameStreak = 0; return false }
     this.severeFrameStreak = intervalMs > 100 ? this.severeFrameStreak + 1 : 0
     if (this.severeFrameStreak < 2) return false
-    const changed = this.stage !== 'flat'
-    this.stage = 'flat'
-    this.ceiling = 'flat'
-    this.locked = true
+    const previous = this.stage
+    if (rank(this.stage) >= rank('coarse')) {
+      this.stage = 'silhouette'
+      this.ceiling = 'silhouette'
+      this.locked = false
+    } else {
+      this.stage = 'flat'
+      this.ceiling = 'flat'
+      this.locked = true
+    }
     this.healthyWindows = 0
-    this.reason = 'two_severe_frames'
-    return changed
+    this.reason = this.stage === 'silhouette' ? 'severe_detail_frames' : 'two_severe_frames'
+    this.severeFrameStreak = 0
+    return this.stage !== previous
   }
 
   observeWindow(input: FrameWindow): FrameWindowResult {
@@ -106,11 +113,15 @@ export class AdaptiveQuality {
     if (stressed) {
       this.healthyWindows = 0
       const previous = this.stage
-      if (severe || rank(this.stage) <= 1) {
+      if (this.stage === 'flat' || this.stage === 'silhouette') {
         this.stage = 'flat'
         this.ceiling = 'flat'
         this.locked = true
-        this.reason = severe ? 'severe_frame_window' : 'coarse_stress'
+        this.reason = severe ? 'severe_frame_window' : 'silhouette_stress'
+      } else if (this.stage === 'coarse') {
+        this.stage = 'silhouette'
+        this.ceiling = 'silhouette'
+        this.reason = severe ? 'coarse_severe_stress' : 'coarse_stress'
       } else {
         this.stage = 'coarse'
         this.ceiling = 'coarse'
@@ -118,7 +129,10 @@ export class AdaptiveQuality {
       }
       return { changed: this.stage !== previous, stage: this.stage, p75, reason: this.reason }
     }
-    if (p75 <= 28 && !input.moving && input.contentReady && !this.locked && rank(this.stage) < rank(this.ceiling)) {
+    // The flat basemap can earn a coarse city silhouette at a lower frame budget;
+    // refinement still requires the stricter headroom measured with 3D active.
+    const promotionBudgetMs = this.stage === 'flat' ? 48 : 28
+    if (p75 <= promotionBudgetMs && !input.moving && input.contentReady && !this.locked && rank(this.stage) < rank(this.ceiling)) {
       this.healthyWindows++
       this.reason = 'measuring_headroom'
       if (this.healthyWindows >= 2) {

@@ -23,6 +23,10 @@ from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if __package__ in {None, ""}:
+    # Keep the documented `python scripts/dev.py ...` entry point equivalent
+    # to module invocation when it imports the shared release validators.
+    sys.path.insert(0, str(ROOT))
 RUNTIME = ROOT / ".runtime"
 STATE = RUNTIME / "dev-processes.json"
 RTK = shutil.which("rtk")
@@ -224,11 +228,14 @@ def _external_tileset_routes(route: str, document: dict[str, object]) -> list[st
         contents = tile.get("contents") or ([tile["content"]] if tile.get("content") else [])
         for content in contents:
             uri = content.get("uri") if isinstance(content, dict) else None
-            if not isinstance(uri, str) or not uri.endswith(".tileset.json"):
+            if not isinstance(uri, str) or not uri.endswith(".json"):
                 continue
             relative = PurePosixPath(uri)
-            if (relative.is_absolute() or ".." in relative.parts or "?" in uri
-                    or "#" in uri):
+            pinned_base_branch = (route.startswith("/v1/developer-overlay/")
+                                  and uri.startswith("/assets/public-citywide-v12/"))
+            if ((relative.is_absolute() and not pinned_base_branch)
+                    or ".." in relative.parts or "?" in uri or "#" in uri
+                    or "\\" in uri or ":" in uri):
                 raise RuntimeError(f"Invalid external tileset reference in {route}: {uri}")
             external.add(str(PurePosixPath(route).parent / relative))
     return sorted(external)
@@ -256,6 +263,28 @@ def _wait_public_city_tileset(base: str, process: subprocess.Popen[bytes] | None
         )
     map_route = "/v1/registry/map" if catalog_view in {"building_registry", "developer_buildings"} else "/v1/map"
     map_document = _read_public_json(f"{base}{map_route}")
+    overlay_pointer = None
+    patched_city_document = None
+    if catalog_view == "developer_buildings":
+        experience_path = ROOT / "data/property/developer_experience/active.json"
+        if experience_path.is_file():
+            experience = json.loads(experience_path.read_text(encoding="utf-8"))
+            if experience.get("schema_version") == "developer-experience-pointer/3":
+                from scripts.runtime_overlay import developer_overlay_files
+                try:
+                    developer_overlay_files(ROOT, experience)
+                    overlay_root = ROOT / "data/property/developer_overlay/runs" / experience["overlay_run_id"]
+                    overlay_manifest = json.loads((overlay_root / "manifest.json").read_text())
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    raise RuntimeError("Local v3 developer overlay is not fully pinned") from exc
+                overlay_pointer = experience
+                if any(document.get("overlay_run_id") != experience["overlay_run_id"]
+                       for document in (health, map_document)):
+                    raise RuntimeError("Live developer overlay differs from the local v3 pointer")
+                if overlay_manifest.get("city_patch") is not None:
+                    expected["city_volumes"] = (
+                        f"/v1/developer-overlay/{experience['overlay_run_id']}/city-patch/tileset.json")
+                    patched_city_document = json.loads((overlay_root / "city-patch/tileset.json").read_text())
     tilesets = map_document.get("tilesets")
     if not isinstance(tilesets, list):
         raise RuntimeError(f"The map API returned invalid tilesets at {map_route}")
@@ -266,7 +295,9 @@ def _wait_public_city_tileset(base: str, process: subprocess.Popen[bytes] | None
         if wanted is None and tile is None:
             continue
         route = tile.get("url") if isinstance(tile, dict) else None
-        if (not isinstance(route, str) or not route.startswith("/assets/")
+        pinned_patch_route = (kind == "city_volumes" and patched_city_document is not None
+                              and route == expected["city_volumes"])
+        if (not isinstance(route, str) or not (route.startswith("/assets/") or pinned_patch_route)
                 or not route.endswith("/tileset.json")
                 or ".." in PurePosixPath(route).parts):
             raise RuntimeError(f"The map API did not publish a valid public {kind} tileset URL")
@@ -276,13 +307,26 @@ def _wait_public_city_tileset(base: str, process: subprocess.Popen[bytes] | None
                 "the API may be stale or serving another checkout."
             )
         root = _read_public_json(f"{base}{route}")
+        if kind == "city_volumes" and patched_city_document is not None and root != patched_city_document:
+            raise RuntimeError("Live city patch tileset differs from its pinned overlay bytes")
         if not isinstance(root.get("root"), dict):
             raise RuntimeError(f"The public tileset has no root: {route}")
         external = _external_tileset_routes(route, root)
-        for branch in sorted({external[0], external[len(external) // 2], external[-1]}) if external else ():
+        sampled = {external[0], external[len(external) // 2], external[-1]} if external else set()
+        patched = [branch for branch in external if branch.startswith("/v1/developer-overlay/")]
+        if patched:
+            sampled.add(patched[0])
+        for branch in sorted(sampled):
             branch_document = _read_public_json(f"{base}{branch}")
             if not isinstance(branch_document.get("root"), dict):
                 raise RuntimeError(f"The external tileset has no root: {branch}")
+            if branch in patched:
+                assert overlay_pointer is not None
+                prefix = f"/v1/developer-overlay/{overlay_pointer['overlay_run_id']}/"
+                local_branch = (ROOT / "data/property/developer_overlay/runs"
+                                / overlay_pointer["overlay_run_id"] / branch.removeprefix(prefix))
+                if branch_document != json.loads(local_branch.read_text()):
+                    raise RuntimeError("Live city patch region differs from its pinned overlay bytes")
 
     # A published model run is part of this checkout's API contract. Catch a
     # stale API/proxy before reporting a successful managed start or restart.
@@ -345,6 +389,10 @@ def _wait_public_city_tileset(base: str, process: subprocess.Popen[bytes] | None
         map_counts = map_document.get("counts")
         point_counts = point_map.get("counts")
         markers = point_map.get("items")
+        if overlay_pointer is not None and any(
+                document.get("overlay_run_id") != overlay_pointer["overlay_run_id"]
+                for document in (listing, point_map)):
+            raise RuntimeError("Live developer overlay list/points differ from the local v3 pointer")
         snapshot_id = health.get("registry_snapshot_id")
         if (health.get("data_mode") != "real" or health.get("map_run_id") != map_run_id
                 or map_document.get("dataset_id") != "developer_building_registry"

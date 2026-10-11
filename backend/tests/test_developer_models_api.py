@@ -17,6 +17,7 @@ MAP_RUN = "developer-map-v1-0123456789abcdef"
 MAP_SNAPSHOT = "developer-map-snapshot-0123456789abcdef"
 MENU_RUN = "developer-units-v1-0123456789abcdef"
 MODEL_RUN = "developer-models-v1-0123456789abcdef"
+STYLED_RUN = "developer-models-v1-fedcba9876543210"
 REGISTRY_ID = "registry-" + "a" * 24
 
 
@@ -39,7 +40,9 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[dict, dic
     menu_sha = _write(developer_units.BASE / "runs" / MENU_RUN / "manifest.json",
                       json.dumps(menu_manifest).encode())
     map_run = {"manifest": map_manifest,
-               "by_registry": {REGISTRY_ID: {"map_eligible": True}}}
+               "by_registry": {REGISTRY_ID: {"map_eligible": True,
+                                              "source_group": "proplanirovki",
+                                              "publisher_project_id": "project-one"}}}
     menu_run = {"manifest": menu_manifest}
     glb = b"glTF" + (2).to_bytes(4, "little") + (12).to_bytes(4, "little")
     asset_sha = _write(developer_models.BASE / "runs" / MODEL_RUN /
@@ -76,12 +79,84 @@ def test_selected_model_route_is_local_and_source_limited(
     assert result["asset_url"] == f"/v1/developer-model-assets/{asset_sha}"
     assert result["label"] == "реконструкция"
     assert result["geometry_basis"] == "source_building_footprint"
-    assert result["height_basis"] == "source_floor_count_times_3m_estimate"
+    assert result["height_basis"] == "source_total_floors_times_3m_estimate"
     assert "aggregator_unverified" not in json.dumps(result)
     assert api.developer_model_asset(asset_sha).body.startswith(b"glTF")
     with pytest.raises(Exception) as exc_info:
         api.developer_model_asset("0" * 64)
     assert getattr(exc_info.value, "status_code", None) == 404
+
+
+def test_project_style_requires_exact_material_and_project_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    map_run, _, _, _ = _fixture(monkeypatch, tmp_path)
+    baseline = developer_models.BASE / "runs" / MODEL_RUN
+    baseline_sha = hashlib.sha256((baseline / "manifest.json").read_bytes()).hexdigest()
+    run = developer_models.BASE / "runs" / STYLED_RUN
+    source_evidence = "e" * 64
+    lods = []
+    texture_rows = []
+    for level in ("near", "closer", "close"):
+        body = ("png:" + level).encode()
+        sha = hashlib.sha256(body).hexdigest()
+        path = f"styles/textures/{sha}.png"
+        _write(run / path, body)
+        lods.append({"level": level, "width": 16, "height": 16,
+                     "mime_type": "image/png", "sha256": sha,
+                     "asset_path": path.removeprefix("styles/"),
+                     "asset_uri": f"facade-style://sha256/{sha}"})
+        texture_rows.append({"path": path, "sha256": sha, "bytes": len(body),
+                             "style_id": "style-one", "level": level})
+    material = {"style_id": "style-one", "publisher_project_id": "project-one",
+                "basis": "project_style_inference", "label": "Реконструкция",
+                "geometry_scope": "appearance_only_no_geometry_change",
+                "source_evidence_sha256": source_evidence, "lods": lods}
+    materials_sha = _write(run / "styles/materials.jsonl",
+                           (json.dumps(material, ensure_ascii=False) + "\n").encode())
+    texture_inventory_sha = _write(run / "styles/texture-inventory.jsonl",
+                                   ("\n".join(json.dumps(row) for row in texture_rows) + "\n").encode())
+    row = json.loads((baseline / "models.jsonl").read_text())
+    row.update({"style_id": "style-one", "source_project_id": "project-one",
+                "facade_style_basis": "project_style_inference",
+                "facade_style_evidence_sha256": source_evidence,
+                "texture_basis": "generated_project_style_repeat_unoriented",
+                "texture_sha256": lods[1]["sha256"],
+                "photo_facade_reconstruction": False,
+                "model_quality": "project_style_inferred_schematic_reconstruction"})
+    models_sha = _write(run / "models.jsonl", (json.dumps(row) + "\n").encode())
+    manifest = json.loads((baseline / "manifest.json").read_text())
+    manifest.update({"run_id": STYLED_RUN, "models_sha256": models_sha,
+                     "base_model_run_id": MODEL_RUN,
+                     "base_model_manifest_sha256": baseline_sha,
+                     "style_batch_manifest_sha256": "a" * 64,
+                     "styles_materials_sha256": materials_sha,
+                     "styles_materials_total": 1,
+                     "styles_texture_inventory_sha256": texture_inventory_sha,
+                     "styles_textures_total": 3,
+                     "styled_models_total": 1})
+    manifest_sha = _write(run / "manifest.json", json.dumps(manifest).encode())
+    model = developer_models.load_staged(
+        STYLED_RUN, map_run, expected_manifest_sha256=manifest_sha)
+    public = developer_models.public_model(map_run, REGISTRY_ID, model, MENU_RUN)
+    assert public["facade_style_basis"] == "project_style_inference"
+    assert public["texture_basis"] == "generated_project_style_repeat_unoriented"
+    manifest["base_model_manifest_sha256"] = "0" * 64
+    invalid_sha = _write(run / "manifest.json", json.dumps(manifest).encode())
+    with pytest.raises(ValueError, match="baseline manifest differs"):
+        developer_models.load_staged(STYLED_RUN, map_run, expected_manifest_sha256=invalid_sha)
+    manifest["base_model_manifest_sha256"] = baseline_sha
+    row["source_project_id"] = "different-project"
+    manifest["models_sha256"] = _write(run / "models.jsonl", (json.dumps(row) + "\n").encode())
+    manifest_sha = _write(run / "manifest.json", json.dumps(manifest).encode())
+    with pytest.raises(ValueError, match="Invalid selected"):
+        developer_models.load_staged(STYLED_RUN, map_run, expected_manifest_sha256=manifest_sha)
+    row["source_project_id"] = "project-one"
+    row["height_m"] = 48.0
+    manifest["models_sha256"] = _write(run / "models.jsonl", (json.dumps(row) + "\n").encode())
+    manifest_sha = _write(run / "manifest.json", json.dumps(manifest).encode())
+    with pytest.raises(ValueError, match="changes source geometry or height"):
+        developer_models.load_staged(STYLED_RUN, map_run, expected_manifest_sha256=manifest_sha)
 
 
 def test_mismatched_menu_generation_does_not_serve_model(

@@ -5,6 +5,8 @@ from __future__ import annotations
 import errno
 import io
 import json
+import subprocess
+import sys
 from pathlib import Path
 from urllib.error import URLError
 
@@ -14,6 +16,16 @@ from scripts import dev
 
 
 BASE = "http://127.0.0.1:5173"
+
+
+def test_direct_script_bootstraps_shared_validator_import_from_any_directory(tmp_path):
+    script = Path(dev.__file__).resolve()
+    result = subprocess.run([sys.executable, "-I", "-c",
+        "import runpy,sys; runpy.run_path(sys.argv[1]); "
+        "from scripts.runtime_overlay import developer_overlay_files; print('validator import PASS')",
+        str(script)], cwd=tmp_path, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "validator import PASS"
 
 
 def _public_fixture(
@@ -161,6 +173,62 @@ def test_startup_checks_published_model_run(
     documents[points_route]["model_run_id"] = "models-v1-0000000000000000"
     with pytest.raises(RuntimeError, match="point-map API differs"):
         dev._wait_public_city_tileset(BASE)
+
+
+@pytest.mark.parametrize("failure", [None, "wrong_run", "stale_city", "stale_region", "stale_list"])
+def test_startup_checks_hash_pinned_v3_city_patch(monkeypatch, tmp_path, failure):
+    from scripts.tests.test_package_deploy_data import _fixture
+    from scripts.tests.test_runtime_overlay import stage_city_patch
+    _fixture(tmp_path)
+    (_, pointer, run, _, _, _), _, _ = stage_city_patch(tmp_path)
+    monkeypatch.setattr(dev, "ROOT", tmp_path)
+    monkeypatch.setattr(dev, "_expected_catalog_view", lambda: "developer_buildings")
+    common = {"map_run_id": pointer["map_run_id"], "overlay_run_id": pointer["overlay_run_id"]}
+    snapshot = pointer["map_snapshot_id"]
+    prefix = f"/v1/developer-overlay/{pointer['overlay_run_id']}/"
+    assets = json.loads((tmp_path / "assets/manifest.json").read_text())
+    models = json.loads((tmp_path / "data/models/active.json").read_text())
+    documents = {
+        "/v1/health": {**common, "catalog_view": "developer_buildings", "data_mode": "real",
+                       "registry_snapshot_id": snapshot},
+        "/v1/registry/map": {**common, "dataset_id": "developer_building_registry", "snapshot_id": snapshot,
+            "counts": {"records": 1, "geocoded": 1}, "tilesets": [
+                {"kind": "city_volumes", "url": prefix + "city-patch/tileset.json"},
+                {"kind": "ground_buildings", "url": assets["ground_tileset_url"]}]},
+        "/v1/registry/buildings?limit=1": {**common, "dataset_id": "developer_building_registry",
+                                         "snapshot_id": snapshot, "dataset_total": 1},
+        "/v1/map/points": {**common, "dataset_id": "developer_map_points", "registry_snapshot_id": snapshot,
+            "dataset_total": 1, "counts": {"points": 1, "registry_points": 1,
+                "registry_points_total": 1, "mapped_construction_points": 0},
+            "items": [{"point_type": "developer_building"}]},
+        "/v1/models/candidates/summary": {"dataset_id": "model_candidates", "run_id": models["run_id"],
+            "model_run_id": models["run_id"], "run_status": "ready", "counts": {"scanned": 1}},
+    }
+    if failure == "wrong_run":
+        documents["/v1/registry/map"]["overlay_run_id"] = "developer-overlay-v1-" + "f" * 16
+    elif failure == "stale_city":
+        documents["/v1/registry/map"]["tilesets"][0]["url"] = assets["city_tileset_url"]
+    elif failure == "stale_list":
+        documents["/v1/registry/buildings?limit=1"]["overlay_run_id"] = None
+    read = []
+    def public_json(url):
+        route = url.removeprefix(BASE)
+        read.append(route)
+        if route in documents:
+            return documents[route]
+        path = (run / route.removeprefix(prefix) if route.startswith(prefix)
+                else tmp_path / route.removeprefix("/"))
+        document = json.loads(path.read_text())
+        if failure == "stale_region" and "/city-patch/regions/" in route:
+            document["root"] = {"stale": True}
+        return document
+    monkeypatch.setattr(dev, "_read_public_json", public_json)
+    if failure is None:
+        dev._wait_public_city_tileset(BASE)
+        assert any("/city-patch/regions/" in route for route in read)
+    else:
+        with pytest.raises(RuntimeError):
+            dev._wait_public_city_tileset(BASE)
 
 
 def test_explicit_registry_off_allows_demo(

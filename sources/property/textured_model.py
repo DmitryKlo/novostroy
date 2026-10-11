@@ -27,7 +27,12 @@ def _edge_metres(first: tuple[float, float], second: tuple[float, float]) -> flo
 
 
 def textured_glb(geometry: Polygon | MultiPolygon, origin_lon: float,
-                 origin_lat: float, height_m: float, png: bytes) -> tuple[bytes, dict[str, Any]]:
+                 origin_lat: float, height_m: float, png: bytes, *,
+                 texture_basis: str = "generated_photo_informed_repeat_unoriented"
+                 ) -> tuple[bytes, dict[str, Any]]:
+    if texture_basis not in {"generated_photo_informed_repeat_unoriented",
+                             "generated_project_style_repeat_unoriented"}:
+        raise ValueError("Unreviewed facade reconstruction basis")
     if sys.byteorder != "little" or not png.startswith(b"\x89PNG\r\n\x1a\n"):
         raise ValueError("Textured GLB requires little-endian host and PNG texture")
     if not 0 < height_m <= 300 or not 0 < len(png) <= 10_000_000:
@@ -82,7 +87,7 @@ def textured_glb(geometry: Polygon | MultiPolygon, origin_lon: float,
     document = {
         "asset": {"version": "2.0", "generator": "Novostroy selected facade reconstruction",
                   "extras": {"reconstruction": True,
-                             "texture_basis": "generated_photo_informed_repeat_unoriented",
+                             "texture_basis": texture_basis,
                              "not_approved_design": True, "source_ids_redacted": True}},
         "extensionsUsed": ["KHR_materials_unlit"],
         "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],

@@ -17,7 +17,8 @@ SAFE_METHODS = frozenset({"exact_ratio", "straight_line", "haversine_straight_li
                           "routed", "source_assertion", "spatial_join"})
 PRIVATE_FIELDS = frozenset({
     "source_id", "source_ids", "source_record_id", "source_fields",
-    "source_updated_at", "source_version", "source_url", "raw_source",
+    "source_updated_at", "source_version", "source_url", "source_page_url",
+    "source_identity", "source_response_sha256", "raw_source",
     "provenance", "poi_source", "provider", "provider_id", "provider_name",
     "evidence", "license", "licenses",
 })

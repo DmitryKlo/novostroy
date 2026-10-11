@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import struct
 import unittest
 
 from sources.property import developer_models as models
@@ -19,7 +22,8 @@ def corpus() -> dict:
 
 
 def point() -> dict:
-    return {"registry_id": "registry-test", "location": [37.00005, 55.00005]}
+    return {"registry_id": "registry-test", "location": [37.00005, 55.00005],
+            "publisher_project_id": "project-1"}
 
 
 def floors() -> dict:
@@ -47,6 +51,23 @@ class DeveloperModelsTest(unittest.TestCase):
         conflict["height_conflict"] = True
         with self.assertRaisesRegex(ValueError, "eligible source floor"):
             models._model(point(), conflict, corpus())
+
+    def test_project_style_changes_appearance_without_geometry_or_height(self) -> None:
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9WctAAAAAASUVORK5CYII=")
+        plain, _ = models._model(point(), floors(), corpus())
+        styled, blob = models._model(point(), floors(), corpus(), style_png=png,
+                                     style_id="style-test", style_evidence_sha256="a" * 64)
+        self.assertEqual(styled["height_m"], plain["height_m"])
+        self.assertEqual(styled["model_transform"], plain["model_transform"])
+        self.assertEqual(styled["source_geometry_evidence_sha256"],
+                         plain["source_geometry_evidence_sha256"])
+        self.assertEqual(styled["facade_style_basis"], "project_style_inference")
+        self.assertEqual(styled["texture_sha256"], models._sha(png))
+        json_size = struct.unpack_from("<I", blob, 12)[0]
+        gltf = json.loads(blob[20:20 + json_size])
+        self.assertEqual(gltf["asset"]["extras"]["texture_basis"],
+                         "generated_project_style_repeat_unoriented")
 
 
 if __name__ == "__main__":

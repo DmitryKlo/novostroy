@@ -5,7 +5,13 @@ import ts from 'typescript'
 
 async function importTypeScript(path) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8')
-  const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  let javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  if (path === '../src/mapPoints.ts') {
+    const factsSource = await readFile(new URL('../src/developerBuildingFacts.ts', import.meta.url), 'utf8')
+    const factsJavascript = ts.transpileModule(factsSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+    const factsUrl = `data:text/javascript;base64,${Buffer.from(factsJavascript).toString('base64')}`
+    javascript = javascript.replace("from './developerBuildingFacts'", `from '${factsUrl}'`)
+  }
   return import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`)
 }
 
@@ -19,15 +25,16 @@ const registry = { point_id: 'mappt_' + 'a'.repeat(24), point_type: 'registry', 
 const mapped = { point_id: 'mappt_' + 'c'.repeat(24), point_type: 'mapped_construction', registry_id: null, candidate_id: 'cand_' + 'd'.repeat(24),
   name: 'Строящийся объект на карте', location: [37.61, 55.75], latest_known_date: null, geometry_as_of: '2026-10-08T00:00:00Z',
   address: 'улица Примерная, 1', address_basis: 'osm_street_house', complex_label: null, complex_label_basis: null, known_catalog_registry_id: null }
-const developer = { ...registry, point_type: 'developer_building', developer_name: 'Застройщик',
+const developer = { ...registry, point_type: 'developer_building', developer_name: null,
+  developer_display_name: 'Застройщик', developer_display_basis: 'aggregator_asserted_unverified',
   observed_at: '2026-10-10T00:00:00Z', unit_count: 3, location_basis: 'publisher_building', address_complete: false }
 
 test('developer point keeps address, ЖК and developer in its card data', () => {
   assert.deepEqual(pointAction(developer), { kind: 'registry', id: developer.registry_id })
   assert.equal(pointAddressCaption(developer), 'Частичный адрес: улица Примерная, 1')
   assert.equal(pointComplexCardCaption(developer, null), 'ЖК: ЖК Пример')
-  assert.equal(pointDeveloperCardCaption(developer), 'Застройщик: Застройщик')
-  assert.equal(pointDeveloperCardCaption({ ...developer, developer_name: null }), 'Застройщик: не указан')
+  assert.equal(pointDeveloperCardCaption(developer), 'Застройщик по данным каталога: Застройщик')
+  assert.equal(pointDeveloperCardCaption({ ...developer, developer_display_name: null }), 'Застройщик не указан в данных источника')
 })
 
 test('coincident source records remain two selectable typed identities', () => {

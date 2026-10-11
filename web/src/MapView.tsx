@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import { LocateFixed, Minus, Plus } from 'lucide-react'
-import type { Complex, DeveloperModel, MapData, MapMarker, NearbyCategory, NearbyPoi, Tileset } from './api'
+import { api, type Complex, type DeveloperModel, type MapData, type MapMarker, type NearbyCategory, type NearbyPoi, type Tileset } from './api'
+import type { DeveloperOverlayViewport } from './developerOverlayApi'
 import { eligibleSelectedModel } from './selectedDeveloperModel'
 import { cityVolumesAtHeight, reconcileTiles, roadDetailAllowed, roadDetailAtHeight, roadScreenSpaceError, stagedCityVersion, TileLoadLedger, tilesToRequest, traversalOptions } from './tileCache'
 import { flatRootsResolved, GroundFirstGate, groundViewSignature, isPreciseGroundTile, type GroundGateState } from './groundGate'
@@ -13,9 +14,12 @@ import { collapseCoveredGroupMembers, markerEntityChanges, markerIdsOnLoadedGrou
 
 type Props = {
   data: MapData | null
+  overlay?: DeveloperOverlayViewport | null
   selectedId: string | null
   selectedModel?: DeveloperModel | null
+  experienceOpen?: boolean
   onSelectedModelVisible?: (visible: boolean) => void
+  onSelectedOverlayStyleVisible?: (visible: boolean) => void
   focusOnSelection?: boolean
   selectionRequestId?: number
   visible?: boolean
@@ -33,6 +37,7 @@ const MOSCOW: [number, number] = [37.6176, 55.7558]
 const corpusCount = (count: number) => `${count.toLocaleString('ru-RU')} ${new Intl.PluralRules('ru-RU').select(count) === 'one' ? 'корпус' : new Intl.PluralRules('ru-RU').select(count) === 'few' ? 'корпуса' : 'корпусов'} с точкой`
 const NO_NEARBY_ITEMS: { layer: NearbyCategory; item: NearbyPoi }[] = []
 const MIB = 1024 * 1024
+const mapResolutionScale = (experienceOpen: boolean) => Math.min(1, 1.5 / window.devicePixelRatio) * (experienceOpen ? 0.68 : 1)
 const CACHE_OVERFLOW_BYTES = 2 * MIB
 const tileWeight = (tile: Tileset) => tile.kind === 'ground_buildings' ? 12 : tile.kind === 'city_volumes' ? 8 : tile.kind === 'roads' ? 2 : tile.kind === 'facade' ? 0.25 : 1
 const coarseSse = (viewer: Cesium.Viewer) => Math.min(1500, Math.max(24, 1500 * 4200 / Math.max(120, viewer.camera.positionCartographic.height)))
@@ -54,7 +59,7 @@ const viewPose = (viewer: Cesium.Viewer): ViewPose => ({
 type PreparedMarker = { marker: MapMarker; world: Cesium.Cartesian3; longitude: number; latitude: number; groupMembers?: GroundPosition[] }
 let savedCamera: { destination: Cesium.Cartesian3; heading: number; pitch: number; roll: number } | null = null
 
-export default function MapView({ data, selectedId, selectedModel = null, onSelectedModelVisible, focusOnSelection = true, selectionRequestId = 0, visible = true, markerLabel = 'ЖК · нажмите, чтобы посмотреть квартиры', nearbyItems = NO_NEARBY_ITEMS, selectedPoiId = null, onSelectNearby, onViewport, onMarkerScale, onSelect, onStatus }: Props) {
+export default function MapView({ data, overlay = null, selectedId, selectedModel = null, experienceOpen = false, onSelectedModelVisible, onSelectedOverlayStyleVisible, focusOnSelection = true, selectionRequestId = 0, visible = true, markerLabel = 'ЖК · нажмите, чтобы посмотреть квартиры', nearbyItems = NO_NEARBY_ITEMS, selectedPoiId = null, onSelectNearby, onViewport, onMarkerScale, onSelect, onStatus }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const nearbySourceRef = useRef<Cesium.CustomDataSource | null>(null)
@@ -85,6 +90,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   const probeEpochRef = useRef(-1)
   const attemptedProbeRef = useRef(new ProbeAttemptLedger())
   const activeAttemptRef = useRef<{ epoch: number; stage: MapQuality; reason: string } | null>(null)
+  const cameraProbeInterruptedRef = useRef(false)
   const stageProbeStartedRef = useRef(false)
   const stageContentReadyRef = useRef(false)
   const facadeProbeStartedRef = useRef(false)
@@ -92,6 +98,9 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   const lastLegacyFlatKeyRef = useRef<string | null>(null)
   const lastMeaningfulPoseRef = useRef<ViewPose | null>(null)
   const loadRetryUsedRef = useRef(false)
+  const loadRetryTimerRef = useRef<number | null>(null)
+  const cityLoadTimerRef = useRef<number | null>(null)
+  const cityLoadStartedAtRef = useRef<number | null>(null)
   const visibleRef = useRef(visible)
   const cityStageRef = useRef<{ tile: Cesium.Cesium3DTileset; version: 'v6' | 'v7'; silhouetteReady: boolean; remove: () => void } | null>(null)
   const movingRef = useRef(false)
@@ -103,12 +112,23 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   const onSelectRef = useRef(onSelect)
   const selectedIdRef = useRef(selectedId)
   const selectedModelVisibleRef = useRef(false)
+  const selectedOverlayStyleVisibleRef = useRef(false)
   const selectedModelTexturesReadyRef = useRef(false)
+  const selectedModelLoadingRef = useRef(false)
+  const experienceOpenRef = useRef(experienceOpen)
   const selectedModelPrimitiveRef = useRef<Cesium.Model | null>(null)
+  const overlayTilesetRef = useRef<{ url: string; tile: Cesium.Cesium3DTileset } | null>(null)
+  const overlayFeaturesRef = useRef(new Map<object, Cesium.Cesium3DTileFeature[]>())
+  const overlayEligibleRef = useRef(new Set<string>())
+  const overlayLakeIdRef = useRef<string | null>(overlay?.lake_registry_id ?? null)
+  const persistentLakePrimitiveRef = useRef<Cesium.Model | null>(null)
+  const persistentLakeShownRef = useRef(false)
+  const [persistentLakeModel, setPersistentLakeModel] = useState<DeveloperModel | null>(null)
   const onSelectNearbyRef = useRef(onSelectNearby)
   const onViewportRef = useRef(onViewport)
   const onMarkerScaleRef = useRef(onMarkerScale)
   const onSelectedModelVisibleRef = useRef(onSelectedModelVisible)
+  const onSelectedOverlayStyleVisibleRef = useRef(onSelectedOverlayStyleVisible)
   const dataRef = useRef(data)
   const [ready, setReady] = useState(false)
   const [sceneError, setSceneError] = useState<string | null>(null)
@@ -126,8 +146,11 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   onViewportRef.current = onViewport
   onMarkerScaleRef.current = onMarkerScale
   onSelectedModelVisibleRef.current = onSelectedModelVisible
+  onSelectedOverlayStyleVisibleRef.current = onSelectedOverlayStyleVisible
   dataRef.current = data
   visibleRef.current = visible
+  experienceOpenRef.current = experienceOpen
+  overlayLakeIdRef.current = overlay?.lake_registry_id ?? null
   if (data) wantedRef.current = new Set(data.tilesets.map((tile) => tile.url))
   const flatTiles = data?.tilesets.filter((tile) => tile.kind === 'ground_buildings' || tile.kind === 'roads' || tile.kind === 'parks' || tile.kind === 'water') ?? []
   const groundDescriptor = flatTiles.find((tile) => tile.kind === 'ground_buildings')
@@ -146,9 +169,10 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     return count
   }
   const stopProbe = (reason: string) => {
-    if ((reason === 'map_hidden' || reason === 'document_hidden' || reason === 'hidden') && probeRef.current.active && activeAttemptRef.current) {
+    if ((reason === 'map_hidden' || reason === 'document_hidden' || reason === 'hidden' || reason === 'camera_motion' || reason === 'selected_model_loading' || reason === 'city_loading' || reason === 'experience_open') && probeRef.current.active && activeAttemptRef.current) {
       const attempt = activeAttemptRef.current
       attemptedProbeRef.current.releaseInterrupted(attempt.epoch, attempt.stage, attempt.reason)
+      if (reason === 'camera_motion') cameraProbeInterruptedRef.current = true
     }
     if (probeRafRef.current !== null) cancelAnimationFrame(probeRafRef.current)
     probeRafRef.current = null
@@ -178,9 +202,39 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     if (viewer.isDestroyed()) { selectedModelVisibleRef.current = false; return }
     if (selectedModelVisibleRef.current === shown) return
     selectedModelVisibleRef.current = shown
+    repaintOverlayFeatures()
     onSelectedModelVisibleRef.current?.(shown)
     if (visibleRef.current) viewer.scene.requestRender()
   }
+  const overlayFeatureShouldShow = (feature: Cesium.Cesium3DTileFeature) => {
+    const id = feature.getProperty('registry_id')
+    if (typeof id !== 'string' || !overlayEligibleRef.current.has(id)) return false
+    if (persistentLakeShownRef.current && id === overlayLakeIdRef.current) return false
+    return !(selectedModelVisibleRef.current && id === selectedIdRef.current && !feature.getProperty('facade_style_id'))
+  }
+  const repaintOverlayFeatures = () => {
+    for (const features of overlayFeaturesRef.current.values()) for (const feature of features)
+      feature.show = overlayFeatureShouldShow(feature)
+  }
+  const styledOverlayVisible = (id: string) => {
+    const selectedTiles = (overlayTilesetRef.current?.tile as unknown as { _selectedTiles?: object[] } | undefined)?._selectedTiles ?? []
+    return selectedTiles.some((tile) => (overlayFeaturesRef.current.get(tile) ?? []).some((feature) =>
+      feature.show && feature.getProperty('registry_id') === id && Boolean(feature.getProperty('facade_style_id'))))
+  }
+  const syncOverlayQuality = (viewer: Cesium.Viewer) => {
+    const tile = overlayTilesetRef.current?.tile
+    if (!tile) return
+    const height = viewer.camera.positionCartographic.height
+    const stage = experienceOpenRef.current && qualityRef.current.stage === 'flat' ? 'silhouette' : qualityRef.current.stage
+    // A few nearby, batched project-style walls remain useful even when the
+    // citywide volume governor has reduced its own detail.
+    const flatSse = height <= 650 ? 32 : Math.max(8, Math.min(256, 50_000 / Math.max(100, height)))
+    tile.maximumScreenSpaceError = stage === 'flat' ? flatSse : stage === 'silhouette' ? 32 : stage === 'coarse' ? 22 : 12
+    tile.show = visibleRef.current && cityAtScaleRef.current
+      && (!lastFlatKeyRef.current || groundGateRef.current?.overlayStarted === true)
+  }
+  const tileRenderStage = (tile: Tileset) => experienceOpenRef.current && tile.kind === 'city_volumes'
+    && tilesRef.current.has(tile.url) ? 'silhouette' : qualityRef.current.stage
   const applyQuality = (viewer: Cesium.Viewer) => {
     const stage = qualityRef.current.stage
     setQualityStage(stage)
@@ -193,17 +247,19 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       if (tile.kind !== 'city_volumes' && tile.kind !== 'facade') continue
       const existing = tilesRef.current.get(tile.url)
       if (!existing) continue
-      existing.show = visibleRef.current && overlayReady && qualityAllows(tile.kind, stage)
+      const renderStage = tileRenderStage(tile)
+      existing.show = visibleRef.current && overlayReady && qualityAllows(tile.kind, renderStage)
         && (tile.kind !== 'city_volumes' || cityAtScaleRef.current)
       if (tile.kind === 'city_volumes' && (cityStageRef.current?.tile !== existing || cityStageRef.current.silhouetteReady))
-        existing.maximumScreenSpaceError = citySseForQuality(stage)
+        existing.maximumScreenSpaceError = citySseForQuality(renderStage)
     }
     syncRoadLod(viewer)
+    syncOverlayQuality(viewer)
     if (visibleRef.current) viewer.scene.requestRender()
   }
   const startProbe = (viewer: Cesium.Viewer, reason: string, restart = false): boolean => {
     const baseReady = groundGateRef.current ? groundGateRef.current.overlayStarted : baseReadyRef.current
-    if (viewerRef.current !== viewer || !probeStartAllowed({
+    if (viewerRef.current !== viewer || selectedModelLoadingRef.current || experienceOpenRef.current || !probeStartAllowed({
       visible: visibleRef.current, documentVisible: document.visibilityState !== 'hidden', baseReady,
       cityAtScale: cityAtScaleRef.current, locked: qualityRef.current.locked,
       moving: movingRef.current, contentReady: stageContentReadyRef.current,
@@ -232,9 +288,20 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     return true
   }
   const recordProbeFrame = (viewer: Cesium.Viewer) => {
+    if (experienceOpenRef.current) { if (probeRef.current.active) stopProbe('experience_open'); return }
     if (probeRef.current.active && probeEpochRef.current !== qualityRef.current.epoch) { stopProbe('stale_epoch'); return }
     const visibleNow = visibleRef.current && document.visibilityState !== 'hidden' && viewerRef.current === viewer
     if (!visibleNow && probeRef.current.active) { stopProbe('hidden'); return }
+    const cityLoading = qualityRef.current.stage !== 'flat' && (dataRef.current?.tilesets ?? []).some((tile) => tile.kind === 'city_volumes'
+      && tilesRef.current.get(tile.url)?.show && !tilesRef.current.get(tile.url)?.tilesLoaded)
+    if (cityLoading) {
+      cityLoadStartedAtRef.current ??= performance.now()
+      if (performance.now() - cityLoadStartedAtRef.current < 5_000) {
+        if (probeRef.current.active) { stopProbe('city_loading'); stageProbeStartedRef.current = false }
+        queueCityLoadProbe(viewer)
+        return
+      }
+    } else cityLoadStartedAtRef.current = null
     const sample = probeRef.current.rendered(performance.now(), visibleNow)
     if (sample.interval === null) return
     const policy = qualityRef.current
@@ -243,25 +310,55 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       stopProbe('severe_stall')
       applyQuality(viewer)
       refreshQuality((version) => version + 1)
+      queueLoadRetry(viewer)
       return
     }
     if (!sample.window) return
     const result = policy.observeWindow({ samples: sample.window, activeProbe: true, visible: visibleNow,
       moving: movingRef.current, contentReady: stageContentReadyRef.current })
     refreshQuality((version) => version + 1)
-    if (result.changed) { stopProbe('quality_changed'); applyQuality(viewer) }
+    if (result.changed) { stopProbe('quality_changed'); applyQuality(viewer); if (policy.locked) queueLoadRetry(viewer) }
     else if (policy.locked) stopProbe('stress_lock')
   }
   const retryAfterLoadSettles = (viewer: Cesium.Viewer) => {
     const gate = groundGateRef.current
-    if (!(gate?.overlayStarted || baseReadyRef.current) || !qualityRef.current.locked || loadRetryUsedRef.current || !cityAtScaleRef.current || movingRef.current) return
+    if (!(gate?.overlayStarted || baseReadyRef.current) || !qualityRef.current.locked || loadRetryUsedRef.current || !cityAtScaleRef.current || movingRef.current || selectedModelLoadingRef.current || experienceOpenRef.current) return
     const baseUrls = gate?.flatUrls ?? dataRef.current?.tilesets.filter((tile) => tile.kind !== 'city_volumes' && tile.kind !== 'facade').map((tile) => tile.url) ?? []
     if (!flatRootsResolved(baseUrls, (url) => rootFailuresRef.current.has(url) || tilesRef.current.has(url))) return
+    if (dataRef.current?.tilesets.some((tile) => tile.kind === 'city_volumes' && tilesRef.current.has(tile.url)
+      && !tilesRef.current.get(tile.url)?.tilesLoaded)) return
     loadRetryUsedRef.current = true
     qualityRef.current.onMeaningfulChange()
     refreshQuality((version) => version + 1)
     stageContentReadyRef.current = qualityRef.current.stage === 'flat'
     stageProbeStartedRef.current = startProbe(viewer, 'flat_load_settled')
+  }
+  const queueLoadRetry = (viewer: Cesium.Viewer) => {
+    if (loadRetryTimerRef.current !== null || loadRetryUsedRef.current) return
+    const epoch = qualityRef.current.epoch
+    let checks = 0
+    const check = () => {
+      loadRetryTimerRef.current = null
+      if (viewerRef.current !== viewer || qualityRef.current.epoch !== epoch || loadRetryUsedRef.current || !qualityRef.current.locked) return
+      if (++checks >= 10) return
+      retryAfterLoadSettles(viewer)
+      if (!loadRetryUsedRef.current) loadRetryTimerRef.current = window.setTimeout(check, 500)
+    }
+    loadRetryTimerRef.current = window.setTimeout(check, 1_000)
+  }
+  const queueCityLoadProbe = (viewer: Cesium.Viewer) => {
+    if (cityLoadTimerRef.current !== null) return
+    const check = () => {
+      cityLoadTimerRef.current = null
+      if (viewerRef.current !== viewer || !visibleRef.current || qualityRef.current.locked || movingRef.current) return
+      const loading = (dataRef.current?.tilesets ?? []).some((tile) => tile.kind === 'city_volumes'
+        && tilesRef.current.get(tile.url)?.show && !tilesRef.current.get(tile.url)?.tilesLoaded)
+      if (!loading || (cityLoadStartedAtRef.current !== null && performance.now() - cityLoadStartedAtRef.current >= 5_000)) {
+        stageContentReadyRef.current = true
+        stageProbeStartedRef.current = startProbe(viewer, 'city_load_settled') || probeRef.current.active
+      } else cityLoadTimerRef.current = window.setTimeout(check, 500)
+    }
+    cityLoadTimerRef.current = window.setTimeout(check, 500)
   }
   const paintSelection = (viewer: Cesium.Viewer, id: string | null) => {
     const map = dataRef.current
@@ -330,7 +427,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       if (tile.kind !== 'city_volumes') continue
       const existing = tilesRef.current.get(tile.url)
       if (existing) existing.show = visibleRef.current && next && (!groundGateRef.current || groundGateRef.current.overlayStarted)
-        && qualityAllows(tile.kind, qualityRef.current.stage)
+        && qualityAllows(tile.kind, tileRenderStage(tile))
     }
     if (visibleRef.current) viewer.scene.requestRender()
     return next
@@ -368,7 +465,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       stopProbe('new_viewer')
       qualityRef.current.resetToFlat('awaiting_ground_frame')
       setQualityStage('flat')
-      viewer.resolutionScale = Math.min(1, 1.5 / window.devicePixelRatio)
+      viewer.resolutionScale = mapResolutionScale(experienceOpenRef.current)
       viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#deddd6')
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#deddd6')
       viewer.scene.globe.showGroundAtmosphere = false
@@ -403,6 +500,11 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
         volumeEvents.lastFrameCameraKey = cameraKey(viewer)
         setRenderedVolume(volumeEvents.lastFrameStage)
         volumeVisibleRef.current = { any: false, detail: false }
+        const styledSelection = Boolean(selectedIdRef.current && styledOverlayVisible(selectedIdRef.current))
+        if (styledSelection !== selectedOverlayStyleVisibleRef.current) {
+          selectedOverlayStyleVisibleRef.current = styledSelection
+          onSelectedOverlayStyleVisibleRef.current?.(styledSelection)
+        }
         recordProbeFrame(viewer)
         const gate = groundGateRef.current
         const hadVisibleGround = groundVisibleRef.current
@@ -468,7 +570,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
       observer = new ResizeObserver(() => {
         if (!viewer.useDefaultRenderLoop) return
-        viewer.resolutionScale = Math.min(1, 1.5 / window.devicePixelRatio)
+        viewer.resolutionScale = mapResolutionScale(experienceOpenRef.current)
         viewer.resize(); syncRoadLod(viewer); reportViewport(viewer); viewer.scene.requestRender()
         const before = lastMeaningfulPoseRef.current
         const after = viewPose(viewer)
@@ -502,6 +604,13 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
             return point ? [point.x, point.y] : null
           },
           cameraHeight: () => viewer.camera.positionCartographic.height,
+          selectForTest: (id: string) => onSelectRef.current(id),
+          focusAtForTest: (longitude: number, latitude: number, heightMetres = 440) => {
+            if (![longitude, latitude, heightMetres].every(Number.isFinite)) return
+            viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(longitude, latitude, 0), 20),
+              { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-38), heightMetres), duration: 0.15 })
+          },
+          zoomOutForTest: () => viewer.camera.zoomOut(Math.max(420, viewer.camera.positionCartographic.height * 0.8)),
           cameraPose: () => ({ longitude: Cesium.Math.toDegrees(viewer.camera.positionCartographic.longitude), latitude: Cesium.Math.toDegrees(viewer.camera.positionCartographic.latitude), height: viewer.camera.positionCartographic.height, heading: Cesium.Math.toDegrees(viewer.camera.heading), pitch: Cesium.Math.toDegrees(viewer.camera.pitch) }),
           markerCount: () => activeMarkerIdsRef.current.size || viewer.entities.values.filter((entity) => Boolean(entity.point)).length,
           markerActive: (id: string) => activeMarkerIdsRef.current.has(id),
@@ -512,6 +621,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
             lastGroundCoverageCount: lastGroundCoverageCountRef.current }),
           viewerIdentity: () => viewer.scene.canvas,
           renderLoop: () => viewer.useDefaultRenderLoop,
+          renderResolutionScale: () => viewer.resolutionScale,
           cityStage: () => cityStageRef.current ? { version: cityStageRef.current.version, silhouetteReady: cityStageRef.current.silhouetteReady, maximumScreenSpaceError: cityStageRef.current.tile.maximumScreenSpaceError } : null,
           cityRange: () => ({ heightMetres: viewer.camera.positionCartographic.height, hasGround: Boolean(lastFlatKeyRef.current), cityEnabled: cityAtScaleRef.current, enableAtMetres: 12_000, disableAtMetres: 16_000 }),
           roadLod: () => ({ heightMetres: viewer.camera.positionCartographic.height, nearScale: roadDetailAtScaleRef.current,
@@ -526,12 +636,27 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
           })) ?? [],
           volumeStage: () => ({ ...volumeEventsRef.current }),
           selectedModelState: () => ({ loaded: Boolean(selectedModelPrimitiveRef.current?.ready), texturesReady: selectedModelTexturesReadyRef.current, visible: selectedModelVisibleRef.current,
+            primitiveShown: selectedModelPrimitiveRef.current?.show ?? false,
+            persistentLakeLoaded: Boolean(persistentLakePrimitiveRef.current?.ready), persistentLakeShown: persistentLakeShownRef.current,
             cityVolumes: (dataRef.current?.tilesets.filter((tile) => tile.kind === 'city_volumes') ?? []).map((tile) => ({
               loaded: tilesRef.current.has(tile.url), shown: tilesRef.current.get(tile.url)?.show ?? false,
               expectedWithoutSelection: visibleRef.current && cityAtScaleRef.current
                 && (!groundGateRef.current || groundGateRef.current.overlayStarted)
                 && qualityAllows(tile.kind, qualityRef.current.stage),
             })) }),
+          overlayState: () => ({ url: overlayTilesetRef.current?.url ?? null,
+            loaded: Boolean(overlayTilesetRef.current?.tile), shown: overlayTilesetRef.current?.tile.show ?? false,
+            maximumScreenSpaceError: overlayTilesetRef.current?.tile.maximumScreenSpaceError ?? null,
+            selectedTiles: ((overlayTilesetRef.current?.tile as unknown as { _selectedTiles?: unknown[] } | undefined)?._selectedTiles?.length ?? 0),
+            visibleFeatureCount: [...overlayFeaturesRef.current.values()].reduce((total, features) => total + features.filter((feature) => feature.show).length, 0),
+            styledVisibleFeatureCount: [...overlayFeaturesRef.current.values()].reduce((total, features) => total + features.filter((feature) => feature.show && feature.getProperty('facade_style_id')).length, 0),
+            selectedStyledFeatureCount: ((overlayTilesetRef.current?.tile as unknown as { _selectedTiles?: object[] } | undefined)?._selectedTiles ?? [])
+              .reduce((total, tile) => total + (overlayFeaturesRef.current.get(tile) ?? [])
+                .filter((feature) => feature.show && feature.getProperty('facade_style_id')).length, 0),
+            featureCount: [...overlayFeaturesRef.current.values()].reduce((total, features) => total + features.length, 0),
+            eligibleCount: overlayEligibleRef.current.size,
+            selectedContent: ((overlayTilesetRef.current?.tile as unknown as { _selectedTiles?: { _contentResource?: { getUrlComponent?: () => string } }[] } | undefined)?._selectedTiles ?? [])
+              .slice(0, 20).map((item) => item._contentResource?.getUrlComponent?.() ?? null) }),
           failedLayers: () => tileHealthRef.current.active(dataRef.current?.tilesets.map((tile) => tile.url) ?? []),
           cacheBudget: () => [...tilesRef.current.values()].map((tile) => ({ cacheBytes: tile.cacheBytes, maximumCacheOverflowBytes: tile.maximumCacheOverflowBytes, totalMemoryUsageInBytes: tile.totalMemoryUsageInBytes })),
           tileSelection: () => [...tilesRef.current.entries()].map(([url, tile]) => {
@@ -562,8 +687,14 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       savedCamera = { destination: Cesium.Cartesian3.clone(viewer.camera.positionWC), heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: viewer.camera.roll }
       observer?.disconnect(); handler?.destroy(); removeFrameListener?.(); removeGroundFrameListener?.(); removeVisibilityListener?.()
       stopProbe('viewer_destroyed')
+      if (loadRetryTimerRef.current !== null) window.clearTimeout(loadRetryTimerRef.current)
+      loadRetryTimerRef.current = null
+      if (cityLoadTimerRef.current !== null) window.clearTimeout(cityLoadTimerRef.current)
+      cityLoadTimerRef.current = null
+      cityLoadStartedAtRef.current = null
       cityStageRef.current?.remove(); cityStageRef.current = null
       selectedModelPrimitiveRef.current = null; selectedModelVisibleRef.current = false; selectedModelTexturesReadyRef.current = false
+      selectedOverlayStyleVisibleRef.current = false
       delete (window as unknown as { __novoMapTest?: unknown }).__novoMapTest
       loadLedgerRef.current.reset()
       viewerRef.current = null
@@ -589,15 +720,38 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
 
   useEffect(() => {
     const viewer = viewerRef.current
+    if (!viewer || !ready) return
+    if (experienceOpen) { stopProbe('experience_open'); stageProbeStartedRef.current = false }
+    const next = mapResolutionScale(experienceOpen)
+    if (Math.abs(viewer.resolutionScale - next) >= 0.001) {
+      viewer.resolutionScale = next
+      viewer.resize()
+      reportViewport(viewer)
+      viewer.scene.requestRender()
+    }
+    applyQuality(viewer)
+    if (!experienceOpen && visibleRef.current) {
+      stageContentReadyRef.current = qualityRef.current.stage === 'flat' || (dataRef.current?.tilesets ?? [])
+        .filter((tile) => tile.kind === 'city_volumes').every((tile) => tilesRef.current.get(tile.url)?.tilesLoaded)
+      stageProbeStartedRef.current = startProbe(viewer, 'experience_closed') || probeRef.current.active
+    }
+  }, [experienceOpen, ready])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
     if (!viewer) return
     viewer.useDefaultRenderLoop = visible
     if (visible) {
       cameraEpochRef.current++
       groundCoverageRef.current = []
       const stage = cityStageRef.current
-      if (stage?.silhouetteReady && !movingRef.current) stage.tile.maximumScreenSpaceError = citySseForQuality(qualityRef.current.stage)
+      if (stage?.silhouetteReady && !movingRef.current) {
+        const city = dataRef.current?.tilesets.find((tile) => tile.kind === 'city_volumes')
+        stage.tile.maximumScreenSpaceError = citySseForQuality(city ? tileRenderStage(city) : qualityRef.current.stage)
+      }
       viewer.resize()
       syncRoadLod(viewer)
+      syncOverlayQuality(viewer)
       reportViewport(viewer)
       viewer.scene.requestRender()
       if (groundGateRef.current?.overlayStarted || baseReadyRef.current) startProbe(viewer, 'map_resumed')
@@ -610,21 +764,101 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
   }, [visible, ready])
 
   useEffect(() => {
+    if (!overlay?.lake_persistent || !overlay.lake_registry_id || !overlay.lake_persistent_model_sha256) {
+      setPersistentLakeModel(null)
+      return
+    }
+    const controller = new AbortController()
+    setPersistentLakeModel(null)
+    void api.developerModel(overlay.lake_registry_id, controller.signal).then((model) => {
+      if (controller.signal.aborted || !eligibleSelectedModel(model)
+        || model.registry_id !== overlay.lake_registry_id
+        || model.asset_sha256 !== overlay.lake_persistent_model_sha256
+        || model.registry_snapshot_id !== overlay.registry_snapshot_id
+        || model.map_run_id !== overlay.map_run_id || model.unit_run_id !== overlay.unit_run_id
+        || model.enrichment_run_id !== overlay.enrichment_run_id
+        || model.overlay_run_id !== overlay.overlay_run_id) return
+      setPersistentLakeModel(model)
+    }).catch((error) => { if (!controller.signal.aborted) console.warn('Реконструкция дома недоступна', error) })
+    return () => controller.abort()
+  }, [overlay?.lake_persistent, overlay?.lake_registry_id, overlay?.lake_persistent_model_sha256, overlay?.overlay_run_id])
+
+  useEffect(() => {
     const viewer = viewerRef.current
-    if (!viewer || !ready || !visible || !selectedId || !eligibleSelectedModel(selectedModel)) return
+    if (!viewer || !ready || !visible || !persistentLakeModel || !eligibleSelectedModel(persistentLakeModel)) return
+    const modelData = persistentLakeModel
+    const matrix = Cesium.Matrix4.fromArray(modelData.model_transform)
+    const center = Cesium.Matrix4.getTranslation(matrix, new Cesium.Cartesian3())
+    let disposed = false
+    let attached: Cesium.Model | null = null
+    const syncVisibility = () => {
+      if (disposed || !attached || viewerRef.current !== viewer) return
+      const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, center)
+      const canvas = viewer.scene.canvas
+      const onScreen = Boolean(pixel && pixel.x >= 0 && pixel.x <= canvas.clientWidth && pixel.y >= 0 && pixel.y <= canvas.clientHeight)
+      const selected = selectedIdRef.current === modelData.registry_id
+      const near = viewer.camera.positionCartographic.height <= 950
+      const shown = Boolean(attached.ready && onScreen && (selected || (near && overlayEligibleRef.current.has(modelData.registry_id))))
+      if (attached.show !== shown) { attached.show = shown; viewer.scene.requestRender() }
+      if (persistentLakeShownRef.current !== shown) {
+        persistentLakeShownRef.current = shown
+        repaintOverlayFeatures()
+      }
+      if (selected) setSelectedModelVisible(viewer, shown)
+    }
+    const removeRender = viewer.scene.postRender.addEventListener(syncVisibility)
+    void Cesium.Model.fromGltfAsync({ url: modelData.asset_url, modelMatrix: matrix,
+      forwardAxis: Cesium.Axis.X, incrementallyLoadTextures: true,
+      allowPicking: false, shadows: Cesium.ShadowMode.DISABLED }).then((model) => {
+      if (disposed || viewerRef.current !== viewer) { model.destroy(); return }
+      attached = viewer.scene.primitives.add(model)
+      persistentLakePrimitiveRef.current = attached
+      syncVisibility()
+      viewer.scene.requestRender()
+    }).catch((error) => { if (!disposed) console.warn('Реконструкция дома не загрузилась', error) })
+    return () => {
+      disposed = true
+      removeRender()
+      if (selectedIdRef.current === modelData.registry_id) setSelectedModelVisible(viewer, false)
+      persistentLakeShownRef.current = false
+      repaintOverlayFeatures()
+      if (attached && !viewer.isDestroyed()) viewer.scene.primitives.remove(attached)
+      persistentLakePrimitiveRef.current = null
+    }
+  }, [ready, visible, persistentLakeModel])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || !ready || !visible || !selectedId || !eligibleSelectedModel(selectedModel)
+      || (overlay?.lake_persistent && selectedId === overlay.lake_registry_id && persistentLakeModel)) return
     const modelData = selectedModel
     const matrix = Cesium.Matrix4.fromArray(modelData.model_transform)
     const center = Cesium.Matrix4.getTranslation(matrix, new Cesium.Cartesian3())
     let disposed = false
     let attached: Cesium.Model | null = null
     let removeTexturesReady: (() => void) | null = null
+    let loadTimeout: number | null = null
     selectedModelTexturesReadyRef.current = false
+    selectedModelLoadingRef.current = true
+    stopProbe('selected_model_loading')
+    const finishLoading = () => {
+      if (disposed) return
+      if (loadTimeout !== null) { window.clearTimeout(loadTimeout); loadTimeout = null }
+      selectedModelLoadingRef.current = false
+      if (viewerRef.current === viewer && visibleRef.current) {
+        if (qualityRef.current.locked) queueLoadRetry(viewer)
+        else stageProbeStartedRef.current = startProbe(viewer, 'selected_model_settled') || probeRef.current.active
+      }
+    }
+    loadTimeout = window.setTimeout(finishLoading, 5_000)
     const syncVisibility = () => {
       if (disposed || !attached || viewerRef.current !== viewer) return
       const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, center)
       const canvas = viewer.scene.canvas
       const onScreen = pixel && pixel.x >= 0 && pixel.x <= canvas.clientWidth && pixel.y >= 0 && pixel.y <= canvas.clientHeight
-      setSelectedModelVisible(viewer, Boolean(attached.ready && onScreen && visibleRef.current && document.visibilityState !== 'hidden'))
+      const useOverlayStyle = Boolean(modelData.facade_style_basis && styledOverlayVisible(modelData.registry_id))
+      if (attached.show === useOverlayStyle) { attached.show = !useOverlayStyle; viewer.scene.requestRender() }
+      setSelectedModelVisible(viewer, Boolean(attached.ready && attached.show && onScreen && visibleRef.current && document.visibilityState !== 'hidden'))
     }
     const removeRender = viewer.scene.postRender.addEventListener(syncVisibility)
     void Cesium.Model.fromGltfAsync({ url: modelData.asset_url, modelMatrix: matrix, forwardAxis: Cesium.Axis.X,
@@ -632,24 +866,80 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       if (disposed || viewerRef.current !== viewer) { model.destroy(); return }
       removeTexturesReady = model.texturesReadyEvent.addEventListener(() => {
         selectedModelTexturesReadyRef.current = true
+        finishLoading()
         viewer.scene.requestRender()
       })
+      if ((model as Cesium.Model & { _texturesLoaded?: boolean })._texturesLoaded) {
+        selectedModelTexturesReadyRef.current = true
+        finishLoading()
+      }
       attached = viewer.scene.primitives.add(model)
       selectedModelPrimitiveRef.current = attached
       viewer.scene.requestRender()
     }).catch(() => {
-      if (!disposed) { setSelectedModelVisible(viewer, false); console.warn('Selected reconstructed model did not load') }
+      if (!disposed) { finishLoading(); setSelectedModelVisible(viewer, false); console.warn('Selected reconstructed model did not load') }
     })
     return () => {
       disposed = true
       removeRender()
       removeTexturesReady?.()
+      if (loadTimeout !== null) window.clearTimeout(loadTimeout)
+      selectedModelLoadingRef.current = false
       setSelectedModelVisible(viewer, false)
       if (attached && !viewer.isDestroyed()) viewer.scene.primitives.remove(attached)
       selectedModelPrimitiveRef.current = null
       selectedModelTexturesReadyRef.current = false
     }
-  }, [ready, visible, selectedId, selectedModel])
+  }, [ready, visible, selectedId, selectedModel, persistentLakeModel, overlay?.lake_persistent, overlay?.lake_registry_id])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    const url = overlay?.tileset_url
+    if (!viewer || !ready || !url) {
+      const previous = overlayTilesetRef.current
+      if (previous && viewer && !viewer.isDestroyed()) viewer.scene.primitives.remove(previous.tile)
+      overlayTilesetRef.current = null
+      overlayFeaturesRef.current.clear()
+      return
+    }
+    if (overlayTilesetRef.current?.url === url) return
+    const previous = overlayTilesetRef.current
+    if (previous) viewer.scene.primitives.remove(previous.tile)
+    overlayTilesetRef.current = null
+    overlayFeaturesRef.current.clear()
+    let disposed = false
+    void Cesium.Cesium3DTileset.fromUrl(url, {
+      maximumScreenSpaceError: 32, preloadFlightDestinations: false,
+      cacheBytes: (window.innerWidth <= 700 ? 24 : 40) * MIB,
+      maximumCacheOverflowBytes: CACHE_OVERFLOW_BYTES,
+    }).then((tile) => {
+      if (disposed || viewerRef.current !== viewer) { tile.destroy(); return }
+      tile.tileVisible.addEventListener((visibleTile) => {
+        const content = visibleTile.content
+        if (!content?.featuresLength) return
+        let features = overlayFeaturesRef.current.get(visibleTile)
+        if (!features) {
+          features = []
+          for (let index = 0; index < content.featuresLength; index++) features.push(content.getFeature(index))
+          overlayFeaturesRef.current.set(visibleTile, features)
+        }
+        for (const feature of features) feature.show = overlayFeatureShouldShow(feature)
+      })
+      tile.tileUnload.addEventListener((unloadedTile) => { overlayFeaturesRef.current.delete(unloadedTile) })
+      tile.tileFailed.addEventListener((error) => console.warn('Часть геометрии домов недоступна', error))
+      overlayTilesetRef.current = { url, tile }
+      viewer.scene.primitives.add(tile)
+      syncOverlayQuality(viewer)
+      viewer.scene.requestRender()
+    }).catch((error) => { if (!disposed) console.warn('Геометрия домов не загрузилась', error) })
+    return () => { disposed = true }
+  }, [ready, overlay?.tileset_url])
+
+  useEffect(() => {
+    overlayEligibleRef.current = new Set(overlay?.eligible_registry_ids ?? [])
+    repaintOverlayFeatures()
+    viewerRef.current?.scene.requestRender()
+  }, [overlay?.eligible_registry_ids, selectedId])
 
   useEffect(() => {
     if (!ready || !data) return
@@ -767,10 +1057,11 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     for (const tile of data.tilesets.filter((item) => item.kind === 'city_volumes' || item.kind === 'facade')) {
       const existing = tilesRef.current.get(tile.url)
       if (existing) {
-        existing.show = overlayAllowed && qualityAllows(tile.kind, activeQuality)
+        const renderStage = tileRenderStage(tile)
+        existing.show = overlayAllowed && qualityAllows(tile.kind, renderStage)
           && (tile.kind !== 'city_volumes' || cityAllowedAtScale)
         if (tile.kind === 'city_volumes' && (cityStageRef.current?.tile !== existing || cityStageRef.current.silhouetteReady))
-          existing.maximumScreenSpaceError = citySseForQuality(activeQuality)
+          existing.maximumScreenSpaceError = citySseForQuality(renderStage)
       }
     }
     const totalBudget = (window.innerWidth <= 700 ? 128 : 160) * MIB
@@ -842,7 +1133,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
         if (tile.kind === 'city_volumes') {
           tileset.tileVisible.addEventListener((visibleTile) => {
             if (!visibleRef.current || !visibleTile.hasRenderableContent || !visibleTile.contentReady) return
-            if (qualityRef.current.stage === 'coarse' && !stageProbeStartedRef.current
+            if ((qualityRef.current.stage === 'silhouette' || qualityRef.current.stage === 'coarse') && !stageProbeStartedRef.current
               && (!stageVersion || visibleTile.geometricError < 650)) {
               stageContentReadyRef.current = true
               stageProbeStartedRef.current = startProbe(viewer, 'coarse_city_visible') || probeRef.current.active
@@ -856,8 +1147,9 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
           })
           tileset.allTilesLoaded.addEventListener(() => {
             volumeEventsRef.current.allLoaded++
+            cityLoadStartedAtRef.current = null
             retryAfterLoadSettles(viewer)
-            if ((qualityRef.current.stage === 'balanced' || qualityRef.current.stage === 'detail')
+            if (qualityRef.current.stage !== 'flat'
               && !stageProbeStartedRef.current && volumeEventsRef.current.visible > 0) {
               stageContentReadyRef.current = true
               stageProbeStartedRef.current = startProbe(viewer, 'city_refinement_settled') || probeRef.current.active
@@ -903,21 +1195,25 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat, featured ? 30 : 0), 100), { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(featured ? -50 : -60), featured ? 800 : 4200), duration: 1.3 })
       framedRef.current = true
     }
+    syncOverlayQuality(viewer)
     viewer.scene.requestRender()
   }, [data, visible, flatKey, overlayAllowedKey, cityAtScale, qualityStage])
 
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer) return
-    const start = () => { movingRef.current = true; cameraEpochRef.current++; groundCoverageRef.current = []; syncCityRange(viewer, lastFlatKeyRef.current); syncRoadLod(viewer); groundGateRef.current?.cameraMoved(); groundTileFailedRef.current = false; stopProbe('camera_motion'); const stage = cityStageRef.current; if (stage) { stage.silhouetteReady = false; stage.tile.maximumScreenSpaceError = coarseSse(viewer); viewer.scene.requestRender() } }
-    const changed = () => { syncCityRange(viewer, lastFlatKeyRef.current); syncRoadLod(viewer); if (movingRef.current) groundGateRef.current?.cameraMoved(); const stage = cityStageRef.current; if (movingRef.current && stage) { stage.silhouetteReady = false; stage.tile.maximumScreenSpaceError = coarseSse(viewer) } }
+    const start = () => { movingRef.current = true; cameraEpochRef.current++; groundCoverageRef.current = []; syncCityRange(viewer, lastFlatKeyRef.current); syncRoadLod(viewer); syncOverlayQuality(viewer); groundGateRef.current?.cameraMoved(); groundTileFailedRef.current = false; stopProbe('camera_motion'); const stage = cityStageRef.current; if (stage) { stage.silhouetteReady = false; stage.tile.maximumScreenSpaceError = coarseSse(viewer); viewer.scene.requestRender() } }
+    const changed = () => { syncCityRange(viewer, lastFlatKeyRef.current); syncRoadLod(viewer); syncOverlayQuality(viewer); if (movingRef.current) groundGateRef.current?.cameraMoved(); const stage = cityStageRef.current; if (movingRef.current && stage) { stage.silhouetteReady = false; stage.tile.maximumScreenSpaceError = coarseSse(viewer) } }
     const end = () => {
       movingRef.current = false
       cameraEpochRef.current++
       groundCoverageRef.current = []
       syncCityRange(viewer, lastFlatKeyRef.current)
       syncRoadLod(viewer)
+      syncOverlayQuality(viewer)
       reportViewport(viewer)
+      const interruptedProbe = cameraProbeInterruptedRef.current
+      cameraProbeInterruptedRef.current = false
       stopProbe('camera_settled')
       const after = viewPose(viewer)
       const meaningful = !lastMeaningfulPoseRef.current || meaningfulViewChange(lastMeaningfulPoseRef.current, after)
@@ -932,7 +1228,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
       const stage = cityStageRef.current
       if (stage?.silhouetteReady) stage.tile.maximumScreenSpaceError = citySseForQuality(qualityRef.current.stage)
       viewer.scene.requestRender()
-      if (meaningful && (groundGateRef.current?.overlayStarted || baseReadyRef.current))
+      if ((meaningful || interruptedProbe) && (groundGateRef.current?.overlayStarted || baseReadyRef.current))
         stageProbeStartedRef.current = startProbe(viewer, 'camera_settled')
     }
     const removeStart = viewer.camera.moveStart.addEventListener(start)
@@ -994,7 +1290,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     : deferredCity.length ? 'плоская карта · 3D при приближении'
     : groundPhase && groundPhase !== 'overlay_ready' ? 'плоская подложка'
       : qualityStage === 'flat' && data?.tilesets.some((tile) => tile.kind === 'city_volumes' || tile.kind === 'facade')
-        ? qualityRef.current.locked ? '3D приостановлено: карта перегружена'
+        ? qualityRef.current.locked ? 'Детализация города снижена'
           : probeRef.current.active ? 'проверяем плавность карты'
             : probeRef.current.reason === 'request_cap' ? '3D отложено: нет кадров для проверки'
               : qualityRef.current.windows > 0 ? '3D отложено по плавности' : '3D ожидает проверки плавности'
@@ -1007,7 +1303,7 @@ export default function MapView({ data, selectedId, selectedModel = null, onSele
     {sceneError && <div className="map-fallback" role="status"><strong>Карта временно недоступна</strong><span>{sceneError}</span></div>}
     <div className="map-top"><span className="map-live-dot" /><span className="map-top-title">Карта Москвы</span><span className="map-top-muted">· {stageLabel} · {layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span><span className="map-top-mobile">{data?.counts.developer_building_points !== undefined ? corpusCount(data.counts.developer_building_points) : layerLoadText(connectedAtScale, totalAtScale, activeFailures)}</span></div>
     {activeFailures.length > 0 && <div className="map-health-alert" role="status"><strong>Часть карты не загрузилась</strong><span>Ошибка тайлов: {activeFailures.map((failure) => failure.label).join(', ')}. Обновите страницу; если ошибка повторится, проверьте данные карты.</span></div>}
-    <div className="map-controls"><button aria-label="Приблизить карту" onClick={() => zoom(1)} disabled={!ready}><Plus size={18} /></button><button aria-label="Отдалить карту" onClick={() => zoom(-1)} disabled={!ready}><Minus size={18} /></button><button aria-label="К центру Москвы" onClick={recenter} disabled={!ready}><LocateFixed size={18} /></button></div>
+    <div className="map-controls"><button className="map-zoom-control" aria-label="Приблизить карту" onClick={() => zoom(1)} disabled={!ready}><Plus size={18} /></button><button className="map-zoom-control" aria-label="Отдалить карту" onClick={() => zoom(-1)} disabled={!ready}><Minus size={18} /></button><button aria-label="К центру Москвы" onClick={recenter} disabled={!ready}><LocateFixed size={18} /></button></div>
     {data?.markers && <button className="map-fit-all" type="button" onClick={fitAllPoints} disabled={!ready || data.markers.length === 0}>Показать все новостройки</button>}
     {data && <div className="map-key">{data.markers ? data.counts.developer_building_points !== undefined
       ? <><span className="key-dot" /> Корпуса с подтверждённой точкой: {data.counts.developer_building_points ?? 0} <span className="key-divider" /> {markerLabel}</>

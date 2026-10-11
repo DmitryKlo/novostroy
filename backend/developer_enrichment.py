@@ -127,7 +127,7 @@ def _validated(run_id: str, expected_manifest_sha256: str,
                map_id: str, map_snapshot_id: str, map_manifest_sha256: str,
                unit_id: str, unit_manifest_sha256: str,
                model_id: str, model_manifest_sha256: str,
-               registry_ids: frozenset[str],
+               registry_groups: tuple[tuple[str, str], ...],
                unit_bindings: frozenset[tuple[str, str]],
                floor_bindings: frozenset[tuple[str, str]]) -> dict[str, Any]:
     del signatures  # included in the cache key so changed immutable files revalidate
@@ -159,6 +159,8 @@ def _validated(run_id: str, expected_manifest_sha256: str,
         if manifest.get(f"{name}_total") != len(rows):
             raise ValueError("Developer enrichment row count differs from manifest")
         data[name] = rows
+    registry_source_groups = dict(registry_groups)
+    registry_ids = frozenset(registry_source_groups)
     buildings: dict[str, dict[str, Any]] = {}
     for row in data["buildings"]:
         key = row.get("registry_id")
@@ -175,6 +177,22 @@ def _validated(run_id: str, expected_manifest_sha256: str,
             raise ValueError("Developer enrichment noise index is invalid")
         if not _valid_air_model(row.get("air_model")):
             raise ValueError("Developer enrichment air model is invalid")
+        display = row.get("developer_display_name")
+        basis = row.get("developer_display_basis")
+        evidence = row.get("developer_display_evidence_sha256")
+        if (row.get("developer_legal_name") is not None or
+                (display is None and (basis is not None or evidence is not None)) or
+                (display is not None and
+                 (not isinstance(display, str) or not 0 < len(display.strip()) <= 160 or
+                  basis not in {"aggregator_asserted_unverified",
+                                "first_party_source_brand", "official_project_brand"} or
+                  not isinstance(evidence, str) or SHA_RE.fullmatch(evidence) is None))):
+            raise ValueError("Developer enrichment display name has no valid source basis")
+        if (basis == "aggregator_asserted_unverified" and
+                registry_source_groups[key] != "proplanirovki") or (
+                basis == "first_party_source_brand" and
+                registry_source_groups[key] not in {"a101", "fsk"}):
+            raise ValueError("Developer enrichment display basis contradicts provider")
         buildings[key] = row
     if set(buildings) != registry_ids:
         raise ValueError("Developer enrichment omits active buildings")
@@ -251,7 +269,8 @@ def load_staged(run_id: str, map_run: dict[str, Any], menu: dict[str, Any],
         model_manifest["run_id"],
         _pinned_manifest_sha(ROOT / "data/property/developer_models/runs" /
                              model_manifest["run_id"] / "manifest.json"),
-        frozenset(map_run["by_registry"]),
+        tuple(sorted((key, row["source_group"])
+                     for key, row in map_run["by_registry"].items())),
         frozenset((key, row["registry_id"]) for key, row in menu["units"].items()),
         frozenset((key, row["registry_id"]) for key, row in menu["floors"].items()),
     )

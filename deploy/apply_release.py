@@ -40,6 +40,7 @@ SNAPSHOT_PATH_RE = re.compile(
 UNIT_RUN_RE = re.compile(r"developer-units-v1-[0-9a-f]{16}\Z")
 SELECTED_MODEL_RUN_RE = re.compile(r"developer-models-v1-[0-9a-f]{16}\Z")
 ENRICHMENT_RUN_RE = re.compile(r"developer-enrichment-v1-[0-9a-f]{16}\Z")
+OVERLAY_RUN_RE = re.compile(r"developer-overlay-v1-[0-9a-f]{16}\Z")
 
 
 def _release_json(release: Path, relative: str, hashes: dict[str, str]) -> dict[str, Any]:
@@ -211,10 +212,13 @@ def _verify_developer_experience(release: Path, hashes: dict[str, str]) -> None:
                          "map_manifest_sha256", "unit_run_id", "unit_manifest_sha256",
                          "model_run_id", "model_manifest_sha256"}
     version = pointer.get("schema_version")
-    if version == "developer-experience-pointer/2":
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         keys |= {"enrichment_run_id", "enrichment_manifest_sha256"}
+    if version == "developer-experience-pointer/3":
+        keys |= {"overlay_run_id", "overlay_manifest_sha256"}
     if (set(pointer) != keys
-            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2"}):
+            or version not in {"developer-experience-pointer/1", "developer-experience-pointer/2",
+                               "developer-experience-pointer/3"}):
         raise ValueError("Invalid unified developer experience pointer")
     map_run, map_snapshot = pointer.get("map_run_id"), pointer.get("map_snapshot_id")
     unit_run, model_run = pointer.get("unit_run_id"), pointer.get("model_run_id")
@@ -277,14 +281,20 @@ def _verify_developer_experience(release: Path, hashes: dict[str, str]) -> None:
     if (model_manifest.get("assets_total") != selected
             or model_manifest.get("assets_bytes") != selected_bytes):
         raise ValueError("Selected model assets differ from model manifest")
+    from scripts.runtime_model_styles import developer_model_style_files
+    developer_model_style_files(release, model_prefix, model_manifest, hashes)
     for old_pointer in ("data/property/developer_units/active.json",
                         "data/property/developer_models/active.json",
-                        "data/property/developer_enrichment/active.json"):
+                        "data/property/developer_enrichment/active.json",
+                        "data/property/developer_overlay/active.json"):
         if old_pointer in hashes:
             raise ValueError("Release has a competing developer active pointer")
-    if version == "developer-experience-pointer/2":
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         from scripts.package_deploy_data import developer_enrichment_files
         developer_enrichment_files(release, pointer, hashes)
+    if version == "developer-experience-pointer/3":
+        from scripts.runtime_overlay import developer_overlay_files
+        developer_overlay_files(release, pointer, hashes)
 
 
 def _directory(path: Path) -> Path:
@@ -449,6 +459,7 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
     run_id = health.get("map_run_id")
     unit_run_id = health.get("unit_run_id")
     enrichment_run_id = health.get("enrichment_run_id")
+    overlay_run_id = health.get("overlay_run_id")
     snapshot_id = health.get("registry_snapshot_id")
     if (health.get("data_mode") != "real" or health.get("catalog_view") != "developer_buildings"
             or health.get("status") != "developer_buildings_ready"
@@ -456,6 +467,8 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or not isinstance(unit_run_id, str) or UNIT_RUN_RE.fullmatch(unit_run_id) is None
             or (enrichment_run_id is not None and (not isinstance(enrichment_run_id, str)
                 or ENRICHMENT_RUN_RE.fullmatch(enrichment_run_id) is None))
+            or (overlay_run_id is not None and (not isinstance(overlay_run_id, str)
+                or OVERLAY_RUN_RE.fullmatch(overlay_run_id) is None))
             or not isinstance(snapshot_id, str) or not snapshot_id):
         raise RuntimeError("Proxy health did not select a ready real developer-building map")
     total = buildings.get("dataset_total")
@@ -465,6 +478,7 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or buildings.get("map_run_id") != run_id
             or buildings.get("unit_run_id") != unit_run_id
             or buildings.get("enrichment_run_id") != enrichment_run_id
+            or buildings.get("overlay_run_id") != overlay_run_id
             or not isinstance(total, int) or total < 1
             or buildings.get("source_total") != total
             or buildings.get("archived_total") != 0
@@ -478,6 +492,7 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
             or points.get("map_run_id") != run_id
             or points.get("unit_run_id") != unit_run_id
             or points.get("enrichment_run_id") != enrichment_run_id
+            or points.get("overlay_run_id") != overlay_run_id
             or points.get("dataset_total") != total
             or not isinstance(counts, dict) or not isinstance(items, list)
             or counts.get("points") != len(items)
@@ -498,6 +513,8 @@ def verify_developer_payloads(health: dict[str, Any], buildings: dict[str, Any],
               "buildings": total, "points": mapped}
     if enrichment_run_id is not None:
         result["enrichment_run_id"] = enrichment_run_id
+    if overlay_run_id is not None:
+        result["overlay_run_id"] = overlay_run_id
     return result
 
 
@@ -508,7 +525,8 @@ def verify_experience_payloads(verified: dict[str, int | str],
     snapshot_id = pointer.get("map_snapshot_id")
     version = pointer.get("schema_version")
     enrichment_run_id = pointer.get("enrichment_run_id")
-    if version == "developer-experience-pointer/2":
+    overlay_run_id = pointer.get("overlay_run_id")
+    if version in {"developer-experience-pointer/2", "developer-experience-pointer/3"}:
         manifest_sha = pointer.get("enrichment_manifest_sha256")
         if (not isinstance(enrichment_run_id, str)
                 or ENRICHMENT_RUN_RE.fullmatch(enrichment_run_id) is None
@@ -516,14 +534,24 @@ def verify_experience_payloads(verified: dict[str, int | str],
             raise RuntimeError("Invalid pinned developer enrichment generation")
     elif version != "developer-experience-pointer/1" or enrichment_run_id is not None:
         raise RuntimeError("Invalid developer experience pointer schema")
+    if version == "developer-experience-pointer/3":
+        manifest_sha = pointer.get("overlay_manifest_sha256")
+        if (not isinstance(overlay_run_id, str)
+                or OVERLAY_RUN_RE.fullmatch(overlay_run_id) is None
+                or not isinstance(manifest_sha, str) or HASH_RE.fullmatch(manifest_sha) is None):
+            raise RuntimeError("Invalid pinned developer overlay generation")
+    elif overlay_run_id is not None or "overlay_manifest_sha256" in pointer:
+        raise RuntimeError("Developer overlay requires a v3 experience pointer")
     common = {"registry_snapshot_id": snapshot_id,
               "map_run_id": verified["map_run_id"],
               "unit_run_id": verified["unit_run_id"],
               "enrichment_run_id": enrichment_run_id,
+              "overlay_run_id": overlay_run_id,
               "registry_id": building_id}
     if (pointer.get("map_run_id") != verified["map_run_id"]
             or pointer.get("unit_run_id") != verified["unit_run_id"]
             or verified.get("enrichment_run_id") != enrichment_run_id
+            or verified.get("overlay_run_id") != overlay_run_id
             or any(floors.get(key) != value or model.get(key) != value
                    for key, value in common.items())
             or model.get("model_run_id") != pointer.get("model_run_id")
@@ -536,6 +564,63 @@ def verify_experience_payloads(verified: dict[str, int | str],
             raise RuntimeError("Selected model lacks its pinned asset URL")
     elif model.get("asset_url") is not None:
         raise RuntimeError("Unavailable selected model exposes an asset URL")
+
+
+def _smoke_overlay(base: str, release: Path, pointer: dict[str, Any]) -> None:
+    """Check live v3 routes against the release already verified before Compose."""
+    run_id = pointer["overlay_run_id"]
+    folder = release / "data/property/developer_overlay/runs" / run_id
+    manifest_bytes = (folder / "manifest.json").read_bytes()
+    if hashlib.sha256(manifest_bytes).hexdigest() != pointer["overlay_manifest_sha256"]:
+        raise RuntimeError("Selected overlay manifest changed before live smoke")
+    manifest = json.loads(manifest_bytes)
+    identity = {"registry_snapshot_id": pointer["map_snapshot_id"],
+                **{key: pointer[key] for key in ("map_run_id", "unit_run_id", "enrichment_run_id")},
+                "overlay_run_id": run_id}
+    route = f"/v1/developer-overlay/{run_id}/tileset.json"
+    patch_route = (f"/v1/developer-overlay/{run_id}/city-patch/tileset.json"
+                   if manifest.get("city_patch") is not None else None)
+    viewport = _read_json(base + "/v1/developer-overlay/viewport?west=36&south=54&east=39&north=57&limit=1500")
+    lake_persistent = manifest.get("lake_persistent") is True
+    lake_ids = ([row["registry_id"] for row in map(json.loads,
+                 (folder / "features.jsonl").read_text().splitlines())
+                 if row.get("source_geometry_id") == "osm:way/1317814900@2"]
+                if lake_persistent else [])
+    facade = manifest.get("facade_styles")
+    expected_facade = ({key: facade[key] for key in (
+        "basis", "label", "styled_projects_total", "styled_persistent_features_total", "texture_level")}
+        if facade is not None else None)
+    ids = viewport.get("eligible_registry_ids")
+    if (viewport.get("dataset_id") != "developer_source_geometry_overlay"
+            or any(viewport.get(key) != value for key, value in identity.items())
+            or viewport.get("tileset_url") != route or viewport.get("city_patch_url") != patch_route
+            or viewport.get("features_total") != manifest.get("features_total")
+            or not isinstance(ids, list) or not ids
+            or any(not isinstance(value, str) or not value for value in ids)
+            or len(set(ids)) != len(ids) or viewport.get("matched_total") != len(ids)
+            or viewport.get("truncated") is not False
+            or viewport.get("lake_persistent") is not lake_persistent
+            or (lake_persistent and len(lake_ids) != 1)
+            or viewport.get("lake_registry_id") != (lake_ids[0] if lake_ids else None)
+            or viewport.get("lake_persistent_model_sha256") != (
+                manifest.get("lake_persistent_model_sha256") if lake_persistent else None)
+            or viewport.get("facade_style") != expected_facade):
+        raise RuntimeError("Live developer overlay viewport differs from selected generation")
+    city_map = _read_json(base + "/v1/registry/map")
+    if (any(city_map.get(key if key != "registry_snapshot_id" else "snapshot_id") != value
+            for key, value in identity.items())):
+        raise RuntimeError("Live city map differs from selected overlay generation")
+    city = next((row for row in city_map.get("tilesets", [])
+                 if isinstance(row, dict) and row.get("kind") == "city_volumes"), {})
+    base_assets = json.loads((release / "assets/manifest.json").read_bytes())
+    if city.get("url") != (patch_route or base_assets.get("city_tileset_url")):
+        raise RuntimeError("Live city volumes do not use the pinned overlay/base tileset")
+    for local, public, sha in [("tileset.json", route, manifest["tileset_sha256"])] + (
+            [("city-patch/tileset.json", patch_route, manifest["city_patch"]["tileset_sha256"])]
+            if patch_route else []):
+        body = (folder / local).read_bytes()
+        if hashlib.sha256(body).hexdigest() != sha or _read_json(base + public) != json.loads(body):
+            raise RuntimeError("Live overlay tileset differs from pinned release bytes")
 
 
 def _smoke(settings: dict[str, str]) -> None:
@@ -551,6 +636,8 @@ def _smoke(settings: dict[str, str]) -> None:
     experience = json.loads((release / "data/property/developer_experience/active.json")
                             .read_text(encoding="utf-8"))
     verify_experience_payloads(verified, first_building, floors, model, experience)
+    if experience["schema_version"] == "developer-experience-pointer/3":
+        _smoke_overlay(base, release, experience)
     models = _read_json(f"{base}/v1/models/candidates/summary")
     if models.get("run_status") != "ready" or models.get("counts", {}).get("scanned", 0) < 1:
         raise RuntimeError("The selected model review run is unavailable")

@@ -12,6 +12,8 @@ namespace Novostroy.Runtime
         [JsonProperty("catalog_view")] public string CatalogView { get; set; }
         [JsonProperty("registry_enabled")] public bool RegistryEnabled { get; set; }
         [JsonProperty("registry_snapshot_id")] public string RegistrySnapshotId { get; set; }
+        [JsonProperty("enrichment_run_id")] public string EnrichmentRunId { get; set; }
+        [JsonProperty("overlay_run_id")] public string OverlayRunId { get; set; }
     }
 
     public sealed class MapResponse
@@ -46,6 +48,32 @@ namespace Novostroy.Runtime
 
     // Additive point-map wire. Native registry browsing is still explicitly
     // unsupported; these typed targets must not become demo complex IDs.
+    public sealed class SourceInternalAirIndex
+    {
+        [JsonProperty("status")] public string Status { get; set; }
+        [JsonProperty("value")] public int? Value { get; set; }
+        [JsonProperty("scale_id")] public string ScaleId { get; set; }
+        [JsonProperty("higher_is_worse")] public bool HigherIsWorse { get; set; }
+        [JsonProperty("official_index")] public bool OfficialIndex { get; set; }
+        [JsonProperty("measurement")] public bool Measurement { get; set; }
+        [JsonProperty("valid_at")] public string ValidAt { get; set; }
+        [JsonProperty("stale_after")] public string StaleAfter { get; set; }
+    }
+
+    public sealed class SourceAirQuality
+    {
+        [JsonProperty("status")] public string Status { get; set; }
+        [JsonProperty("label")] public string Label { get; set; }
+        [JsonProperty("internal_index")] public SourceInternalAirIndex InternalIndex { get; set; }
+    }
+
+    public sealed class SourceSectionFloorCount
+    {
+        [JsonProperty("section_label")] public string SectionLabel { get; set; }
+        [JsonProperty("total_floors")] public int TotalFloors { get; set; }
+        [JsonProperty("total_floors_basis")] public string TotalFloorsBasis { get; set; }
+    }
+
     public sealed class SourceMapPoint
     {
         [JsonProperty("point_id")] public string PointId { get; set; }
@@ -62,6 +90,13 @@ namespace Novostroy.Runtime
         [JsonProperty("complex_label_basis")] public string ComplexLabelBasis { get; set; }
         [JsonProperty("known_catalog_registry_id")] public string KnownCatalogRegistryId { get; set; }
         [JsonProperty("developer_name")] public string DeveloperName { get; set; }
+        [JsonProperty("developer_display_name")] public string DeveloperDisplayName { get; set; }
+        [JsonProperty("developer_display_basis")] public string DeveloperDisplayBasis { get; set; }
+        [JsonProperty("total_floors")] public int? TotalFloors { get; set; }
+        [JsonProperty("total_floors_basis")] public string TotalFloorsBasis { get; set; }
+        [JsonProperty("max_observed_unit_floor")] public int? MaxObservedUnitFloor { get; set; }
+        [JsonProperty("section_floor_counts")] public List<SourceSectionFloorCount> SectionFloorCounts { get; set; }
+        [JsonProperty("air_quality")] public SourceAirQuality AirQuality { get; set; }
         [JsonProperty("unit_count")] public int? UnitCount { get; set; }
         [JsonProperty("observed_at")] public string ObservedAt { get; set; }
         [JsonProperty("location_basis")] public string LocationBasis { get; set; }
@@ -105,6 +140,9 @@ namespace Novostroy.Runtime
         [JsonProperty("registry_snapshot_id")] public string RegistrySnapshotId { get; set; }
         [JsonProperty("model_run_id")] public string ModelRunId { get; set; }
         [JsonProperty("map_run_id")] public string MapRunId { get; set; }
+        [JsonProperty("unit_run_id")] public string UnitRunId { get; set; }
+        [JsonProperty("enrichment_run_id")] public string EnrichmentRunId { get; set; }
+        [JsonProperty("overlay_run_id")] public string OverlayRunId { get; set; }
         [JsonProperty("snapshot_at")] public string SnapshotAt { get; set; }
         [JsonProperty("checked_at")] public string CheckedAt { get; set; }
         [JsonProperty("registry_rights_status")] public string RegistryRightsStatus { get; set; }
@@ -116,6 +154,28 @@ namespace Novostroy.Runtime
         [JsonProperty("applied_filters")] public Dictionary<string, JToken> AppliedFilters { get; set; }
         [JsonProperty("items")] public List<SourceMapPoint> Items { get; set; }
         [JsonProperty("group_evidence")] public SourceMapPointGroupEvidence GroupEvidence { get; set; }
+    }
+
+    // A selected viewport references one pinned batch tileset. Native clients
+    // must not infer a building identity from a visual city volume.
+    public sealed class SourceDeveloperOverlayViewport
+    {
+        [JsonProperty("dataset_id")] public string DatasetId { get; set; }
+        [JsonProperty("registry_snapshot_id")] public string RegistrySnapshotId { get; set; }
+        [JsonProperty("map_run_id")] public string MapRunId { get; set; }
+        [JsonProperty("unit_run_id")] public string UnitRunId { get; set; }
+        [JsonProperty("enrichment_run_id")] public string EnrichmentRunId { get; set; }
+        [JsonProperty("overlay_run_id")] public string OverlayRunId { get; set; }
+        [JsonProperty("tileset_url")] public string TilesetUrl { get; set; }
+        [JsonProperty("city_patch_url")] public string CityPatchUrl { get; set; }
+        [JsonProperty("bbox")] public double[] Bbox { get; set; }
+        [JsonProperty("features_total")] public int FeaturesTotal { get; set; }
+        [JsonProperty("matched_total")] public int MatchedTotal { get; set; }
+        [JsonProperty("limit")] public int Limit { get; set; }
+        [JsonProperty("offset")] public int Offset { get; set; }
+        [JsonProperty("truncated")] public bool Truncated { get; set; }
+        [JsonProperty("eligible_registry_ids")] public List<string> EligibleRegistryIds { get; set; }
+        [JsonProperty("applied_filters")] public Dictionary<string, JToken> AppliedFilters { get; set; }
     }
 
     // Additive local-amenity wire. A route is an approximate estimate from a

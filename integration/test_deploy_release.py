@@ -306,6 +306,81 @@ class DeployReleaseTests(unittest.TestCase):
                 row.pop("enrichment_run_id", None)
             run_smoke(legacy_responses, legacy)
 
+            overlay = "developer-overlay-v1-" + "6" * 16
+            v3_pointer = {**pointer, "schema_version": "developer-experience-pointer/3",
+                          "overlay_run_id": overlay, "overlay_manifest_sha256": "5" * 64}
+            v3_responses = json.loads(json.dumps(responses))
+            for endpoint in list(v3_responses)[:-1]:
+                v3_responses[endpoint]["overlay_run_id"] = overlay
+            overlay_root = release / "data/property/developer_overlay/runs" / overlay
+            overlay_root.mkdir(parents=True)
+            tileset = {"asset": {"version": "1.0"}, "root": {}}
+            tileset_bytes = json.dumps(tileset).encode()
+            (overlay_root / "tileset.json").write_bytes(tileset_bytes)
+            manifest_bytes = json.dumps({"features_total": 1, "city_patch": None,
+                "tileset_sha256": hashlib.sha256(tileset_bytes).hexdigest()}).encode()
+            (overlay_root / "manifest.json").write_bytes(manifest_bytes)
+            v3_pointer["overlay_manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
+            overlay_url = f"/v1/developer-overlay/{overlay}/tileset.json"
+            viewport_route = "/v1/developer-overlay/viewport?west=36&south=54&east=39&north=57&limit=1500"
+            v3_responses[viewport_route] = {**common, "overlay_run_id": overlay,
+                "dataset_id": "developer_source_geometry_overlay", "tileset_url": overlay_url,
+                "city_patch_url": None, "features_total": 1, "matched_total": 1,
+                "eligible_registry_ids": [registry_id], "truncated": False,
+                "lake_persistent": False, "lake_registry_id": None,
+                "lake_persistent_model_sha256": None, "facade_style": None}
+            (release / "assets/manifest.json").write_text(json.dumps({
+                "city_tileset_url": "/assets/public-citywide-v12/tileset.json"}))
+            v3_responses["/v1/registry/map"] = {**common, "overlay_run_id": overlay,
+                "snapshot_id": pointer["map_snapshot_id"], "tilesets": [{"kind": "city_volumes",
+                    "url": json.loads((release / "assets/manifest.json").read_text())["city_tileset_url"]}]}
+            v3_responses[overlay_url] = tileset
+            run_smoke(v3_responses, v3_pointer)
+            for endpoint in [key for key in v3_responses if key not in {
+                    "/v1/models/candidates/summary", overlay_url}]:
+                with self.subTest(overlay_endpoint=endpoint):
+                    mixed = json.loads(json.dumps(v3_responses))
+                    mixed[endpoint]["overlay_run_id"] = "developer-overlay-v1-" + "0" * 16
+                    with self.assertRaises(RuntimeError):
+                        run_smoke(mixed, v3_pointer)
+            for endpoint, key, value in [(viewport_route, "tileset_url", "/assets/stale/tileset.json"),
+                                         (viewport_route, "eligible_registry_ids", []),
+                                         (overlay_url, "root", {"stale": True})]:
+                with self.subTest(route=endpoint, key=key):
+                    mixed = json.loads(json.dumps(v3_responses))
+                    mixed[endpoint][key] = value
+                    with self.assertRaises(RuntimeError):
+                        run_smoke(mixed, v3_pointer)
+            for broken in ({**v3_pointer, "overlay_run_id": "invalid"},
+                           {**v3_pointer, "overlay_manifest_sha256": None},
+                           {**v3_pointer, "schema_version": "developer-experience-pointer/2"}):
+                with self.subTest(overlay_pointer=broken), self.assertRaises(RuntimeError):
+                    run_smoke(v3_responses, broken)
+            # New live appearance/readiness fields must describe this exact
+            # selected model and coverage rather than a cached earlier overlay.
+            facade = {"basis": "project_style_inference", "label": "Реконструкция",
+                      "styled_projects_total": 1, "styled_persistent_features_total": 1,
+                      "texture_level": "near"}
+            manifest = json.loads(manifest_bytes)
+            manifest.update(lake_persistent=True, lake_persistent_model_sha256="d" * 64,
+                            facade_styles=facade)
+            manifest_bytes = json.dumps(manifest).encode()
+            (overlay_root / "manifest.json").write_bytes(manifest_bytes)
+            (overlay_root / "features.jsonl").write_text(json.dumps({
+                "registry_id": registry_id, "source_geometry_id": "osm:way/1317814900@2"}) + "\n")
+            v3_pointer["overlay_manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
+            v3_responses[viewport_route].update(lake_persistent=True, lake_registry_id=registry_id,
+                lake_persistent_model_sha256="d" * 64, facade_style=facade)
+            run_smoke(v3_responses, v3_pointer)
+            for key, value in [("lake_persistent", False), ("lake_registry_id", None),
+                               ("lake_persistent_model_sha256", "e" * 64),
+                               ("facade_style", {**facade, "styled_persistent_features_total": 2})]:
+                with self.subTest(readiness=key):
+                    mixed = json.loads(json.dumps(v3_responses))
+                    mixed[viewport_route][key] = value
+                    with self.assertRaises(RuntimeError):
+                        run_smoke(mixed, v3_pointer)
+
     def test_manifest_hashes_and_unlisted_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             release = fixture_release(Path(temporary))

@@ -1,19 +1,19 @@
 import type { DeveloperUnitCriteria, RegistryFilters } from './api'
 
 export function selectedDeveloperUnitCriteria(filters: RegistryFilters): DeveloperUnitCriteria {
-  const { price_min_rub, price_max_rub, price_per_m2_min_rub, price_per_m2_max_rub, rooms, area_min_m2, area_max_m2, unit_floor_min, unit_floor_max, district, okrug_id, max_noise_index } = filters
-  return { price_min_rub, price_max_rub, price_per_m2_min_rub, price_per_m2_max_rub, rooms, area_min_m2, area_max_m2, unit_floor_min, unit_floor_max, district, okrug_id, max_noise_index }
+  const { price_min_rub, price_max_rub, price_per_m2_min_rub, price_per_m2_max_rub, rooms, area_min_m2, area_max_m2, unit_floor_min, unit_floor_max, district, okrug_id, max_noise_index, max_air_index } = filters
+  return { price_min_rub, price_max_rub, price_per_m2_min_rub, price_per_m2_max_rub, rooms, area_min_m2, area_max_m2, unit_floor_min, unit_floor_max, district, okrug_id, max_noise_index, max_air_index }
 }
 
 export type DeveloperUnitFilterDraft = {
   priceMinMln: string; priceMaxMln: string; pricePerM2MinThousand: string; pricePerM2MaxThousand: string;
   rooms: string; areaMinM2: string; areaMaxM2: string; floorMin: string; floorMax: string;
-  okrugId: string; noiseMax: string
+  okrugId: string; noiseMax: string; airMax: string
 }
 
 export const emptyDeveloperUnitFilters = (): DeveloperUnitFilterDraft => ({
   priceMinMln: '', priceMaxMln: '', pricePerM2MinThousand: '', pricePerM2MaxThousand: '',
-  rooms: '', areaMinM2: '', areaMaxM2: '', floorMin: '', floorMax: '', okrugId: '', noiseMax: '',
+  rooms: '', areaMinM2: '', areaMaxM2: '', floorMin: '', floorMax: '', okrugId: '', noiseMax: '', airMax: '',
 })
 
 export const developerUnitFilterCount = (draft: DeveloperUnitFilterDraft): number => Object.values(draft).filter(Boolean).length
@@ -57,6 +57,11 @@ export function parseDeveloperUnitFilters(draft: DeveloperUnitFilterDraft): { fi
   if (noiseMax) {
     if (!/^\d+$/.test(noiseMax) || Number(noiseMax) > 100) return { filters: {}, error: 'Индекс шума: укажите целое число от 0 до 100.' }
     filters.max_noise_index = Number(noiseMax)
+  }
+  const airMax = draft.airMax.trim()
+  if (airMax) {
+    if (!/^\d+$/.test(airMax) || Number(airMax) > 100) return { filters: {}, error: 'Индекс загрязнения: укажите целое число от 0 до 100.' }
+    filters.max_air_index = Number(airMax)
   }
   return { filters, error: null }
 }

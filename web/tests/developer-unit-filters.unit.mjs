@@ -19,6 +19,7 @@ test('observed apartment criteria convert to the strict server fields shared by 
     price_min_rub: 12_500_000, price_max_rub: 18_000_000, price_per_m2_min_rub: undefined,
     price_per_m2_max_rub: 450_000, rooms: 2, area_min_m2: 45.5, area_max_m2: undefined,
     unit_floor_min: 5, unit_floor_max: undefined, district: undefined, okrug_id: undefined, max_noise_index: undefined,
+    max_air_index: undefined,
   })
 })
 
@@ -36,15 +37,22 @@ test('invalid ranges and decimals cannot silently broaden the source unit query'
   }
 })
 
-test('okrug and noise only narrow houses when explicitly selected', () => {
+test('okrug, noise and air only narrow houses when explicitly selected', () => {
   assert.deepEqual(parseDeveloperUnitFilters(emptyDeveloperUnitFilters()).filters, {})
-  const selected = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), okrugId: 'okrug:северный административный', noiseMax: '0' })
+  const selected = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), okrugId: 'okrug:северный административный', noiseMax: '0', airMax: '42' })
   assert.equal(selected.error, null)
-  assert.deepEqual(selected.filters, { okrug_id: 'okrug:северный административный', max_noise_index: 0 })
+  assert.deepEqual(selected.filters, { okrug_id: 'okrug:северный административный', max_noise_index: 0, max_air_index: 42 })
   assert.equal(selectedDeveloperUnitCriteria(selected.filters).max_noise_index, 0)
+  assert.equal(selectedDeveloperUnitCriteria(selected.filters).max_air_index, 42)
   assert.deepEqual(parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), noiseMax: '100' }).filters, { max_noise_index: 100 })
+  assert.deepEqual(parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), airMax: '0' }).filters, { max_air_index: 0 })
   for (const noiseMax of ['101', '-1', '10.5', 'abc']) {
     const invalid = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), noiseMax })
+    assert.ok(invalid.error)
+    assert.deepEqual(invalid.filters, {})
+  }
+  for (const airMax of ['101', '-1', '10.5', 'abc']) {
+    const invalid = parseDeveloperUnitFilters({ ...emptyDeveloperUnitFilters(), airMax })
     assert.ok(invalid.error)
     assert.deepEqual(invalid.filters, {})
   }

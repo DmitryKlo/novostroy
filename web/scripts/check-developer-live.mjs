@@ -107,10 +107,10 @@ async function inspectViewport(name, options, health, firstPage, points) {
     await card.waitFor()
     const cardText = await card.innerText()
     assert.match(cardText, /ЖК:/)
-    assert.match(cardText, /Застройщик:/)
+    assert.match(cardText, /Застройщик|Бренд проекта/)
     assert.ok(cardText.includes(target.address ?? 'Не указано'), 'list card must show the source address')
     assert.ok(cardText.includes(target.complex_label), 'list card must show the source ЖК')
-    assert.ok(cardText.includes(target.developer_name ?? 'Не указано'), 'list card must show the developer')
+    assert.ok(cardText.includes(target.developer_display_name ?? target.developer_legal_name ?? 'Застройщик не указан в данных источника'), 'list card must show source-qualified developer information')
     if (target.address_complete === false) assert.match(cardText, /частичный адрес/)
     result.list_card = { registry_id: target.registry_id, has_address: true, has_complex: true, has_developer: true, partial_address: target.address_complete === false }
     result.screenshots.list = path.join(output, `${name}-list.png`)
@@ -120,10 +120,13 @@ async function inspectViewport(name, options, health, firstPage, points) {
       await card.locator('button').click()
       await page.getByRole('button', { name: 'Закрыть сведения о точке' }).waitFor({ timeout: 15_000 })
       assert.ok(await page.locator('.cesium-widget canvas').first().isVisible(), 'public Cesium canvas is not visible')
+      assert.equal(await page.getByRole('button', { name: 'К центру Москвы' }).isVisible(), true, 'recenter control must remain visible')
+      const zoomControlsVisible = await page.locator('.map-controls .map-zoom-control').first().isVisible()
+      assert.equal(zoomControlsVisible, name !== 'mobile-chromium', 'zoom buttons must only be hidden on mobile')
       const selectedText = await page.locator('.map-point-card').last().innerText()
       assert.ok(selectedText.includes(target.address ?? 'Адрес не указан'))
       assert.ok(selectedText.includes(target.complex_label))
-      assert.ok(selectedText.includes(target.developer_name ?? 'не указан'))
+      assert.ok(selectedText.includes(target.developer_display_name ?? target.developer_legal_name ?? 'Застройщик не указан в данных источника'))
       assert.match(await page.locator('.map-key').textContent(), /Корпуса с подтверждённой точкой/)
       assert.doesNotMatch(await page.locator('.map-key').textContent(), /Картографические стройки/)
       if (name === 'mobile-chromium') {
@@ -189,16 +192,21 @@ async function inspectViewport(name, options, health, firstPage, points) {
     const selectedText = await page.locator('.map-point-card').last().innerText()
     assert.ok(selectedText.includes(target.address ?? 'Адрес не указан'))
     assert.ok(selectedText.includes(target.complex_label))
-    assert.ok(selectedText.includes(target.developer_name ?? 'не указан'))
+    assert.ok(selectedText.includes(target.developer_display_name ?? target.developer_legal_name ?? 'Застройщик не указан в данных источника'))
     result.screenshots.list_selection = path.join(output, `${name}-list-selection.png`)
     await page.screenshot({ path: result.screenshots.list_selection, fullPage: true })
 
     result.nearby = await auditNearby(page, health, point)
 
     await page.getByRole('button', { name: 'Закрыть сведения о точке' }).click()
+    if (name === 'mobile-chromium') await page.waitForTimeout(1_000)
     const cameraBeforePoint = await page.evaluate(() => window.__novoMapTest.cameraPose())
-    await page.getByRole('button', { name: 'Отдалить карту' }).click()
-    await page.getByRole('button', { name: 'Отдалить карту' }).click()
+    if (name === 'mobile-chromium') {
+      await page.evaluate(() => window.__novoMapTest.zoomOutForTest())
+    } else {
+      await page.getByRole('button', { name: 'Отдалить карту' }).click()
+      await page.getByRole('button', { name: 'Отдалить карту' }).click()
+    }
     const cameraZoomedOut = await until('camera zooms out before marker selection', async () => {
       const pose = await page.evaluate(() => window.__novoMapTest.cameraPose())
       return pose.height > cameraBeforePoint.height + 150 ? pose : null
@@ -223,7 +231,7 @@ async function inspectViewport(name, options, health, firstPage, points) {
     const pointText = await page.locator('.map-point-card').last().innerText()
     assert.ok(pointText.includes(target.address ?? 'Адрес не указан'))
     assert.ok(pointText.includes(target.complex_label))
-    assert.ok(pointText.includes(target.developer_name ?? 'не указан'))
+    assert.ok(pointText.includes(target.developer_display_name ?? target.developer_legal_name ?? 'Застройщик не указан в данных источника'))
     if (name === 'mobile-chromium') {
       const card = await page.locator('.map-point-card').last().boundingBox()
       const nearby = await page.locator('.nearby-panel').boundingBox()
@@ -238,8 +246,25 @@ async function inspectViewport(name, options, health, firstPage, points) {
       assert.equal(await page.locator('.nearby-expand').getAttribute('aria-expanded'), 'false')
     }
     result.marker_visibility = await page.evaluate(() => window.__novoMapTest.markerVisibility())
+    result.map_state_at_selection = await page.evaluate(() => ({
+      quality: window.__novoMapTest.adaptiveQuality(),
+      city: window.__novoMapTest.selectedModelState().cityVolumes,
+      volume: window.__novoMapTest.volumeStage(),
+      cityTiles: window.__novoMapTest.tileSelection().filter((tile) => tile.url.includes('citywide')),
+    }))
     result.screenshots.point_selection = path.join(output, `${name}-point-selection.png`)
     await page.screenshot({ path: result.screenshots.point_selection, fullPage: true })
+    if (name === 'desktop') {
+      await page.waitForTimeout(2_000)
+      result.map_state_settled = await page.evaluate(() => ({
+        quality: window.__novoMapTest.adaptiveQuality(),
+        city: window.__novoMapTest.selectedModelState().cityVolumes,
+        volume: window.__novoMapTest.volumeStage(),
+        cityTiles: window.__novoMapTest.tileSelection().filter((tile) => tile.url.includes('citywide')),
+      }))
+      result.screenshots.point_selection_settled = path.join(output, `${name}-point-selection-settled.png`)
+      await page.screenshot({ path: result.screenshots.point_selection_settled, fullPage: true })
+    }
     if (name === 'mobile-chromium') {
       await page.locator('.nearby-expand').click()
       await page.locator('.nearby-results').waitFor()
@@ -273,6 +298,10 @@ async function inspectViewport(name, options, health, firstPage, points) {
     assert.deepEqual(result.console_errors, [])
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error)
+    if (diagnosticsAvailable) result.failure_map_state = await page.evaluate(() => {
+      const map = window.__novoMapTest
+      return map?.cameraPose ? { camera: map.cameraPose(), marker: map.markerVisibility(), quality: map.adaptiveQuality(), ground: map.groundStage(), selected: map.selectedModelState() } : null
+    }).catch(() => null)
     result.screenshots.failure = path.join(output, `${name}-failure.png`)
     await page.screenshot({ path: result.screenshots.failure, fullPage: true }).catch(() => {})
     throw error

@@ -22,7 +22,8 @@ from starlette.middleware.gzip import GZipMiddleware
 from analytics.store import AnalyticsStore
 from backend.public import EXPOSE_SOURCES, public_payload
 from backend.coverage import data_coverage
-from backend import developer_experience, developer_map, developer_models, developer_units
+from backend import (air_quality_index, developer_experience, developer_map,
+                     developer_models, developer_overlay, developer_units)
 from backend.generation import pin_generation, reset_generation, resolve_generation
 from backend.map_point_groups import GroupEvidenceError, load_group_evidence
 from backend.models import (CANDIDATE_ID_RE, MODEL_FILE_RE, PUBLIC_ROOT_RE,
@@ -368,6 +369,7 @@ def health() -> dict[str, Any]:
         "enrichment_run_id": (experience[0]["enrichment"]["manifest"]["run_id"]
                               if experience is not None and
                               experience[0].get("enrichment") is not None else None),
+        "overlay_run_id": _overlay_run_id(experience[0] if experience else None),
     })
 
 
@@ -426,12 +428,18 @@ def _developer_as_of(snapshot: dict[str, Any]) -> str:
             if observed else snapshot["manifest"]["observed_at"])
 
 
+def _overlay_run_id(menu: dict[str, Any] | None) -> str | None:
+    geometry = menu.get("overlay") if menu else None
+    return geometry["manifest"]["run_id"] if geometry else None
+
+
 def _developer_list(
     snapshot: dict[str, Any], query: str | None, *, district: str | None = None,
     okrug_id: str | None = None, max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     **raw_unit_filters: Any
 ) -> tuple[list[dict[str, Any]], dict[str, int], str | None, dict[str, Any],
-           dict[str, Any] | None]:
+           dict[str, Any] | None, dict[str, Any] | None]:
     """Use one observed apartment for every hard constraint across all views."""
     try:
         filters = developer_units.normalize_unit_filters(**raw_unit_filters)
@@ -453,20 +461,32 @@ def _developer_list(
     if max_noise_index is not None and (type(max_noise_index) is not int or
                                         not 0 <= max_noise_index <= 100):
         raise error("invalid_request", "Индекс шума должен быть от 0 до 100", 422)
+    if max_air_index is not None and (type(max_air_index) is not int or
+                                      not 0 <= max_air_index <= 100):
+        raise error("invalid_request", "Индекс загрязнения должен быть от 0 до 100", 422)
     overlay = experience[0].get("enrichment") if experience is not None else None
     if overlay is None and any(value is not None for value in
-                               (district, okrug_id, max_noise_index)):
+                               (district, okrug_id, max_noise_index, max_air_index)):
         raise error("developer_enrichment_unavailable",
                     "Фильтры округа, района и шума ещё подготавливаются", 503)
     selected = developer_map.selected(snapshot, query)
     if overlay is not None:
         enriched = overlay["buildings"]
+        if query and query.strip():
+            selected_ids = {row["registry_id"] for row in selected}
+            needle = query.strip().casefold()
+            selected.extend(row for row in snapshot["rows"]
+                            if row["registry_id"] not in selected_ids and
+                            needle in str(enriched[row["registry_id"]].get(
+                                "developer_display_name") or "").casefold())
         selected = [row for row in selected if
                     enriched[row["registry_id"]]["visibility_eligible"] and
                     (district is None or district.casefold() in {
                         str(enriched[row["registry_id"]].get("district_id") or "").casefold(),
                         str(enriched[row["registry_id"]].get("district_name") or "").casefold()}) and
                     (okrug_id is None or enriched[row["registry_id"]].get("okrug_id") == okrug_id) and
+                    (max_air_index is None or _air_index_matches(
+                        enriched[row["registry_id"]], max_air_index)) and
                     (max_noise_index is None or (
                         enriched[row["registry_id"]].get("noise_index") is not None and
                         enriched[row["registry_id"]]["noise_index"] <= max_noise_index))]
@@ -480,7 +500,7 @@ def _developer_list(
         menu_run_id = menu["manifest"]["run_id"]
         key = (snapshot["manifest"]["run_id"], menu_run_id,
                overlay["manifest"]["run_id"] if overlay else None,
-               query, district, okrug_id, max_noise_index,
+               query, district, okrug_id, max_noise_index, max_air_index,
                tuple(sorted(filters.items())))
         cache = menu.setdefault("selection_cache", {})
         counts = cache.get(key)
@@ -494,14 +514,32 @@ def _developer_list(
             selected = [row for row in selected if counts[row["registry_id"]] > 0]
     applied = {key: value for key, value in (("query", query),
                ("district", district), ("okrug_id", okrug_id),
-               ("max_noise_index", max_noise_index), *filters.items())
+               ("max_noise_index", max_noise_index),
+               ("max_air_index", max_air_index), *filters.items())
                if value is not None}
-    return selected, counts, menu_run_id, applied, overlay
+    return selected, counts, menu_run_id, applied, overlay, experience[0] if experience else None
+
+
+def _public_air_index(model: dict[str, Any] | None) -> dict[str, Any]:
+    """Expose only the dated internal score, never source IDs or private hashes."""
+    computed = air_quality_index.compute_air_quality_index(model)
+    return {key: computed[key] for key in (
+        "status", "value", "scale_id", "higher_is_worse", "component_scores",
+        "dominant_pollutants", "official_index", "measurement",
+        "measured_district_average", "valid_at", "retrieved_at", "stale_after",
+        "spatial_scope", "grid_cell_center", "cell_resolution_km_approx", "reason")}
+
+
+def _air_index_matches(building: dict[str, Any], maximum: int) -> bool:
+    index = air_quality_index.compute_air_quality_index(building.get("air_model"))
+    return (index["status"] == "modeled_forecast" and
+            type(index["value"]) is int and index["value"] <= maximum)
 
 
 def _public_air_quality(building: dict[str, Any] | None) -> dict[str, Any]:
     """Label one dated CAMS grid sample without calling it a district measurement."""
     model = building.get("air_model") if building is not None else None
+    index = _public_air_index(model)
     result = {"status": "unavailable", "label": None, "value": None,
               "unit": None, "observed_at": None, "scope": "district",
               "pm2_5_ug_m3": None, "pm10_ug_m3": None, "no2_ug_m3": None,
@@ -509,7 +547,8 @@ def _public_air_quality(building: dict[str, Any] | None) -> dict[str, Any]:
               "spatial_scope": None, "grid_cell_center": None,
               "cell_resolution_km_approx": None, "stale": None,
               "measurement": False, "measured_district_average": False,
-              "data_credit": None, "reason": "no_district_model_sample"}
+              "data_credit": None, "reason": "no_district_model_sample",
+              "internal_index": index}
     if model is None:
         return result
     try:
@@ -539,11 +578,16 @@ def _developer_public_environment(row: dict[str, Any],
                                   overlay: dict[str, Any] | None) -> dict[str, Any]:
     if overlay is None:
         return {"enrichment_run_id": None,
+                "developer_display_name": None, "developer_display_basis": None,
+                "developer_legal_name": None,
                 "okrug_id": None, "okrug_name": None, "district_id": None,
                 "district_name": None, "noise_index": None,
                 "air_quality": _public_air_quality(None), "media": []}
     value = overlay["buildings"][row["registry_id"]]
     return {"enrichment_run_id": overlay["manifest"]["run_id"],
+            "developer_display_name": value.get("developer_display_name"),
+            "developer_display_basis": value.get("developer_display_basis"),
+            "developer_legal_name": value.get("developer_legal_name"),
             "okrug_id": value.get("okrug_id"), "okrug_name": value.get("okrug_name"),
             "district_id": value.get("district_id"),
             "district_name": value.get("district_name"),
@@ -551,6 +595,29 @@ def _developer_public_environment(row: dict[str, Any],
             "air_quality": _public_air_quality(value),
             "media": _public_developer_media(overlay["media_by_registry"].get(
                 row["registry_id"], []))}
+
+
+def _developer_public_structure(row: dict[str, Any],
+                                menu: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep source building totals distinct from the highest offered floor."""
+    building = menu["buildings"].get(row["registry_id"]) if menu else None
+    sections: list[dict[str, Any]] = []
+    if building is not None:
+        units = menu["units_by_building"].get(row["registry_id"], [])
+        for label in sorted(building.get("source_section_total_floors") or {}):
+            observed_max = max((unit["floor_number"] for unit in units
+                                if unit["section_label"] == label and
+                                unit["floor_number"] is not None), default=0)
+            total, basis = developer_units.section_total_floors(
+                building, label, observed_max)
+            if total is not None:
+                sections.append({"section_label": label, "total_floors": total,
+                                 "total_floors_basis": basis})
+    return {"total_floors": building.get("total_floors") if building else None,
+            "total_floors_basis": building.get("total_floors_basis") if building else None,
+            "max_observed_unit_floor": (building.get("max_observed_unit_floor")
+                                        if building else None),
+            "section_floor_counts": sections}
 
 
 def _public_developer_media(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -590,7 +657,8 @@ def _public_unit_enrichment(menu: dict[str, Any], unit: dict[str, Any]
 
 def _developer_environment_facets(overlay: dict[str, Any] | None) -> dict[str, Any]:
     if overlay is None:
-        return {"okrugs": [], "districts": [], "noise_known_count": 0}
+        return {"okrugs": [], "districts": [], "noise_known_count": 0,
+                "air_index_known_count": 0}
     visible = [row for row in overlay["buildings"].values()
                if row["visibility_eligible"]]
     def options(id_key: str, name_key: str) -> list[dict[str, Any]]:
@@ -601,7 +669,10 @@ def _developer_environment_facets(overlay: dict[str, Any] | None) -> dict[str, A
 
     return {"okrugs": options("okrug_id", "okrug_name"),
             "districts": options("district_id", "district_name"),
-            "noise_known_count": sum(row.get("noise_index") is not None for row in visible)}
+            "noise_known_count": sum(row.get("noise_index") is not None for row in visible),
+            "air_index_known_count": sum(
+                air_quality_index.compute_air_quality_index(row.get("air_model"))["status"] ==
+                "modeled_forecast" for row in visible)}
 
 
 def _selected_registry(registry: dict[str, Any], **filters: Any) -> list[dict[str, Any]]:
@@ -766,6 +837,7 @@ def map_points(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -794,9 +866,10 @@ def map_points(
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+        selected, unit_counts, unit_run_id, applied, overlay, menu = _developer_list(
             developer_snapshot, query, district=district, okrug_id=okrug_id,
-            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
+            max_noise_index=max_noise_index, max_air_index=max_air_index,
+            price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -805,6 +878,7 @@ def map_points(
         rows = [row for row in selected if row["map_eligible"]]
         items = [{**developer_map.public_point(row),
                   **_developer_public_environment(row, overlay),
+                  **_developer_public_structure(row, menu),
                   "matching_units_count": unit_counts[row["registry_id"]]} for row in rows]
         manifest = developer_snapshot["manifest"]
         point_ids = {row["point_id"] for row in rows}
@@ -814,6 +888,7 @@ def map_points(
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
             "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
+            "overlay_run_id": _overlay_run_id(menu),
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
             "checked_at": _developer_as_of(developer_snapshot),
             "dataset_total": manifest["buildings_total"],
@@ -835,6 +910,7 @@ def map_points(
         }, cache_scope="private", weak_validator=True)
     _legacy_unit_filter_guard(
         okrug_id=okrug_id, max_noise_index=max_noise_index,
+        max_air_index=max_air_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
@@ -1032,6 +1108,7 @@ def registry_buildings(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -1061,9 +1138,10 @@ def registry_buildings(
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+        selected, unit_counts, unit_run_id, applied, overlay, menu = _developer_list(
             developer_snapshot, query, district=district, okrug_id=okrug_id,
-            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
+            max_noise_index=max_noise_index, max_air_index=max_air_index,
+            price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -1075,6 +1153,7 @@ def registry_buildings(
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
             "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
+            "overlay_run_id": _overlay_run_id(menu),
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
             "dataset_total": manifest["buildings_total"],
             "source_total": manifest["buildings_total"], "archived_total": 0,
@@ -1088,11 +1167,13 @@ def registry_buildings(
             "applied_filters": applied,
             "items": [{**developer_map.public_building(row),
                        **_developer_public_environment(row, overlay),
+                       **_developer_public_structure(row, menu),
                        "matching_units_count": unit_counts[row["registry_id"]]}
                       for row in selected[offset:offset + limit]],
         })
     _legacy_unit_filter_guard(
         okrug_id=okrug_id, max_noise_index=max_noise_index,
+        max_air_index=max_air_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
@@ -1152,7 +1233,11 @@ def registry_building_detail(registry_id: str) -> dict[str, Any]:
         if overlay is not None and not overlay["buildings"][registry_id]["visibility_eligible"]:
             raise error("not_found", "Building record not found", 404)
         return public_payload({**developer_map.public_building(row),
-                               **_developer_public_environment(row, overlay)})
+                               **_developer_public_environment(row, overlay),
+                               **_developer_public_structure(
+                                   row, experience[0] if experience else None),
+                               "overlay_run_id": _overlay_run_id(
+                                   experience[0] if experience else None)})
     registry = active_registry()
     item = next((item for item in registry["items"] if item["registry_id"] == registry_id
                  and registry_id in registry["visible_ids"]), None)
@@ -1177,7 +1262,7 @@ def active_unit_menu() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _unit_identity(map_snapshot: dict[str, Any], menu: dict[str, Any],
-                   registry_id: str) -> dict[str, str]:
+                   registry_id: str) -> dict[str, Any]:
     if registry_id not in menu["buildings"]:
         raise error("not_found", "Дом отсутствует в текущем наборе", 404)
     manifest = map_snapshot["manifest"]
@@ -1186,6 +1271,7 @@ def _unit_identity(map_snapshot: dict[str, Any], menu: dict[str, Any],
             "unit_run_id": menu["manifest"]["run_id"],
             "enrichment_run_id": (menu["enrichment"]["manifest"]["run_id"]
                                   if menu.get("enrichment") else None),
+            "overlay_run_id": _overlay_run_id(menu),
             "registry_id": registry_id}
 
 
@@ -1231,6 +1317,7 @@ def _menu_environment_filters(menu: dict[str, Any], registry_id: str,
     district = values.get("district")
     okrug_id = values.get("okrug_id")
     max_noise_index = values.get("max_noise_index")
+    max_air_index = values.get("max_air_index")
     if district is not None and (not isinstance(district, str) or
                                  not 0 < len(district.strip()) <= 160):
         raise error("invalid_request", "Неверный район", 422)
@@ -1240,11 +1327,15 @@ def _menu_environment_filters(menu: dict[str, Any], registry_id: str,
     if max_noise_index is not None and (type(max_noise_index) is not int or
                                         not 0 <= max_noise_index <= 100):
         raise error("invalid_request", "Индекс шума должен быть от 0 до 100", 422)
+    if max_air_index is not None and (type(max_air_index) is not int or
+                                      not 0 <= max_air_index <= 100):
+        raise error("invalid_request", "Индекс загрязнения должен быть от 0 до 100", 422)
     district = district.strip() if district is not None else None
     okrug_id = okrug_id.strip() if okrug_id is not None else None
     overlay = menu.get("enrichment")
     if overlay is None:
-        if any(value is not None for value in (district, okrug_id, max_noise_index)):
+        if any(value is not None for value in
+               (district, okrug_id, max_noise_index, max_air_index)):
             raise error("developer_enrichment_unavailable",
                         "Фильтры округа, района и шума ещё подготавливаются", 503)
         return {}
@@ -1255,11 +1346,13 @@ def _menu_environment_filters(menu: dict[str, Any], registry_id: str,
             str(row.get("district_id") or "").casefold(),
             str(row.get("district_name") or "").casefold()} or
             okrug_id is not None and row.get("okrug_id") != okrug_id or
+            max_air_index is not None and not _air_index_matches(row, max_air_index) or
             max_noise_index is not None and
             (row.get("noise_index") is None or row["noise_index"] > max_noise_index)):
         raise error("not_found", "Дом не подходит под выбранные условия", 404)
     return {key: value for key, value in (("district", district),
-            ("okrug_id", okrug_id), ("max_noise_index", max_noise_index))
+            ("okrug_id", okrug_id), ("max_noise_index", max_noise_index),
+            ("max_air_index", max_air_index))
             if value is not None}
 
 
@@ -1269,6 +1362,7 @@ def developer_building_floors(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     price_min_rub: int | None = None,
     price_max_rub: int | None = None,
     price_per_m2_min_rub: int | None = None,
@@ -1320,6 +1414,7 @@ def developer_building_floors(
                                (row["observed_at"] for row in units),
                                key=lambda value: datetime.fromisoformat(value.replace("Z", "+00:00"))),
                            "total_floors": building["total_floors"],
+                           "total_floors_basis": building.get("total_floors_basis"),
                            "max_observed_unit_floor": building["max_observed_unit_floor"],
                            "sections": sections,
                            "unassigned_unit_count": sum(row["floor_number"] is None for row in matched),
@@ -1338,6 +1433,7 @@ def developer_building_floor(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     price_min_rub: int | None = None,
     price_max_rub: int | None = None,
     price_per_m2_min_rub: int | None = None,
@@ -1394,6 +1490,7 @@ def developer_building_units(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     price_min_rub: int | None = None,
     price_max_rub: int | None = None,
     price_per_m2_min_rub: int | None = None,
@@ -1449,6 +1546,7 @@ def developer_building_unit(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     price_min_rub: int | None = None,
     price_max_rub: int | None = None,
     price_per_m2_min_rub: int | None = None,
@@ -1569,7 +1667,8 @@ def developer_building_model(registry_id: str) -> dict[str, Any]:
     return public_payload({**developer_models.public_model(
         map_snapshot, registry_id, model_run, menu["manifest"]["run_id"]),
         "enrichment_run_id": (menu["enrichment"]["manifest"]["run_id"]
-                              if menu.get("enrichment") else None)})
+                              if menu.get("enrichment") else None),
+        "overlay_run_id": _overlay_run_id(menu)})
 
 
 @app.get("/v1/developer-model-assets/{sha256}")
@@ -1631,6 +1730,7 @@ def registry_map(
     district: str | None = None,
     okrug_id: str | None = None,
     max_noise_index: int | None = None,
+    max_air_index: int | None = None,
     handover_year: int | None = None,
     handover_quarter: int | None = None,
     floors_min: int | None = None,
@@ -1658,9 +1758,10 @@ def registry_map(
                            walk_school_max_min=walk_school_max_min,
                            walk_kindergarten_max_min=walk_kindergarten_max_min,
                            walk_medical_max_min=walk_medical_max_min)
-        selected, unit_counts, unit_run_id, applied, overlay = _developer_list(
+        selected, unit_counts, unit_run_id, applied, overlay, menu = _developer_list(
             developer_snapshot, query, district=district, okrug_id=okrug_id,
-            max_noise_index=max_noise_index, price_min_rub=price_min_rub,
+            max_noise_index=max_noise_index, max_air_index=max_air_index,
+            price_min_rub=price_min_rub,
             price_max_rub=price_max_rub,
             price_per_m2_min_rub=price_per_m2_min_rub,
             price_per_m2_max_rub=price_per_m2_max_rub,
@@ -1668,15 +1769,24 @@ def registry_map(
             unit_floor_min=unit_floor_min, unit_floor_max=unit_floor_max)
         mapped = [row for row in selected if row["map_eligible"]]
         manifest = developer_snapshot["manifest"]
+        tilesets = background_tilesets(load_catalogue())
+        geometry = menu.get("overlay") if menu else None
+        if isinstance(geometry, dict) and geometry.get("city_patch") is not None:
+            patch_url = (f"/v1/developer-overlay/{geometry['manifest']['run_id']}"
+                         "/city-patch/tileset.json")
+            tilesets = [{**tile, "url": patch_url} if tile.get("kind") == "city_volumes"
+                        else tile for tile in tilesets]
         return public_payload({
             "dataset_id": "developer_building_registry", "snapshot_id": manifest["snapshot_id"],
             "map_run_id": manifest["run_id"],
             "unit_run_id": unit_run_id,
             "enrichment_run_id": overlay["manifest"]["run_id"] if overlay else None,
+            "overlay_run_id": _overlay_run_id(menu),
             "snapshot_at": _developer_as_of(developer_snapshot)[:10],
-            "center": [37.620, 55.750], "tilesets": background_tilesets(load_catalogue()),
+            "center": [37.620, 55.750], "tilesets": tilesets,
             "items": [{**developer_map.public_building(row),
                        **_developer_public_environment(row, overlay),
+                       **_developer_public_structure(row, menu),
                        "matching_units_count": unit_counts[row["registry_id"]]}
                       for row in mapped],
             "counts": {"records": len(selected), "geocoded": len(mapped), "offers": 0,
@@ -1686,6 +1796,7 @@ def registry_map(
         })
     _legacy_unit_filter_guard(
         okrug_id=okrug_id, max_noise_index=max_noise_index,
+        max_air_index=max_air_index,
         price_min_rub=price_min_rub, price_max_rub=price_max_rub,
         price_per_m2_min_rub=price_per_m2_min_rub,
         price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
@@ -1857,3 +1968,170 @@ def map_view(
         "applied_filters": filters,
         "clarification": None,
     })
+
+
+def _active_developer_overlay() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    map_snapshot, menu = active_unit_menu()
+    geometry = menu.get("overlay")
+    if geometry is None:
+        raise error("developer_overlay_unavailable",
+                    "Проверенная геометрия домов ещё подготавливается", 503)
+    return map_snapshot, menu, geometry
+
+
+@app.get("/v1/developer-overlay/viewport")
+def developer_overlay_viewport(
+    request: Request,
+    west: float = Query(ge=-180, le=180),
+    south: float = Query(ge=-90, le=90),
+    east: float = Query(ge=-180, le=180),
+    north: float = Query(ge=-90, le=90),
+    query: str | None = Query(default=None, max_length=1000),
+    district: str | None = None,
+    okrug_id: str | None = None,
+    max_noise_index: int | None = None,
+    max_air_index: int | None = None,
+    price_min_rub: int | None = None,
+    price_max_rub: int | None = None,
+    price_per_m2_min_rub: int | None = None,
+    price_per_m2_max_rub: int | None = None,
+    rooms: int | None = None,
+    area_min_m2: float | None = None,
+    area_max_m2: float | None = None,
+    unit_floor_min: int | None = None,
+    unit_floor_max: int | None = None,
+    limit: int = Query(default=1200, ge=1, le=1500),
+    offset: int = Query(default=0, ge=0, le=100000),
+) -> dict[str, Any]:
+    """Return filter-eligible IDs for a bounded, batch-tiled city viewport."""
+    if west >= east or south >= north or east - west > 10 or north - south > 10:
+        raise error("invalid_request", "Неверные границы области карты", 422)
+    allowed = {"west", "south", "east", "north", "query", "district", "okrug_id",
+               "max_noise_index", "max_air_index", "price_min_rub", "price_max_rub",
+               "price_per_m2_min_rub", "price_per_m2_max_rub", "rooms", "area_min_m2",
+               "area_max_m2", "unit_floor_min", "unit_floor_max", "limit", "offset"}
+    unknown = set(request.query_params) - allowed
+    if unknown:
+        raise error("invalid_request", "Неподдерживаемые фильтры карты", 422)
+    map_snapshot, menu, geometry = _active_developer_overlay()
+    selected, _, _, applied, _, matched_menu = _developer_list(
+        map_snapshot, query, district=district, okrug_id=okrug_id,
+        max_noise_index=max_noise_index, max_air_index=max_air_index,
+        price_min_rub=price_min_rub, price_max_rub=price_max_rub,
+        price_per_m2_min_rub=price_per_m2_min_rub,
+        price_per_m2_max_rub=price_per_m2_max_rub, rooms=rooms,
+        area_min_m2=area_min_m2, area_max_m2=area_max_m2,
+        unit_floor_min=unit_floor_min, unit_floor_max=unit_floor_max)
+    if matched_menu is None or _overlay_run_id(matched_menu) != geometry["manifest"]["run_id"]:
+        raise error("snapshot_mismatch", "Снимки домов и геометрии не совпадают", 503)
+    def intersects(bounds: list[float]) -> bool:
+        return bounds[0] <= east and bounds[2] >= west and bounds[1] <= north and bounds[3] >= south
+    eligible = sorted(row["registry_id"] for row in selected if row["map_eligible"] and
+                      intersects(geometry["features"][row["registry_id"]]["bounds_lonlat"]))
+    overlay_id = geometry["manifest"]["run_id"]
+    return public_payload({
+        "dataset_id": "developer_source_geometry_overlay",
+        "registry_snapshot_id": map_snapshot["manifest"]["snapshot_id"],
+        "map_run_id": map_snapshot["manifest"]["run_id"],
+        "unit_run_id": menu["manifest"]["run_id"],
+        "enrichment_run_id": menu["enrichment"]["manifest"]["run_id"],
+        "overlay_run_id": overlay_id,
+        "tileset_url": f"/v1/developer-overlay/{overlay_id}/tileset.json",
+        "city_patch_url": (f"/v1/developer-overlay/{overlay_id}/city-patch/tileset.json"
+                           if geometry.get("city_patch") is not None else None),
+        "lake_persistent": geometry["manifest"].get("lake_persistent") is True,
+        "lake_registry_id": (geometry["city_patch"]["lake_registry_id"]
+                             if geometry.get("city_patch") else None),
+        "lake_persistent_model_sha256": (
+            geometry["manifest"].get("lake_persistent_model_sha256")
+            if geometry["manifest"].get("lake_persistent") is True else None),
+        "facade_style": ({
+            "basis": "project_style_inference",
+            "label": "Реконструкция",
+            "styled_projects_total": geometry["facade_styles"]["styled_projects_total"],
+            "styled_persistent_features_total":
+                geometry["facade_styles"]["styled_persistent_features_total"],
+            "texture_level": "near",
+        } if geometry.get("facade_styles") else None),
+        "bbox": [west, south, east, north],
+        "features_total": geometry["manifest"]["features_total"],
+        "matched_total": len(eligible), "limit": limit, "offset": offset,
+        "truncated": offset + limit < len(eligible),
+        "eligible_registry_ids": eligible[offset:offset + limit],
+        "applied_filters": applied,
+    })
+
+
+@app.get("/v1/developer-overlay/{overlay_run_id}/tileset.json")
+def developer_overlay_tileset(overlay_run_id: str) -> Response:
+    _, _, geometry = _active_developer_overlay()
+    if overlay_run_id != geometry["manifest"]["run_id"]:
+        raise error("not_found", "Набор геометрии неактивен", 404)
+    return Response(json.dumps(geometry["tileset"], ensure_ascii=False,
+                               separators=(",", ":")).encode("utf-8"),
+                    media_type="application/json",
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/v1/developer-overlay/{overlay_run_id}/tiles/{sha256}.b3dm")
+def developer_overlay_tile(overlay_run_id: str, sha256: str) -> Response:
+    _, _, geometry = _active_developer_overlay()
+    if overlay_run_id != geometry["manifest"]["run_id"]:
+        raise error("not_found", "Набор геометрии неактивен", 404)
+    try:
+        content = developer_overlay.tile_bytes(geometry, sha256)
+    except FileNotFoundError as exc:
+        raise error("not_found", "Плитка геометрии отсутствует", 404) from exc
+    except (OSError, ValueError) as exc:
+        raise error("developer_overlay_unavailable",
+                    "Проверенная геометрия временно недоступна", 503) from exc
+    return Response(content, media_type="application/octet-stream",
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/v1/developer-overlay/{overlay_run_id}/city-patch/tileset.json")
+def developer_city_patch_tileset(overlay_run_id: str) -> Response:
+    _, _, geometry = _active_developer_overlay()
+    patch = geometry.get("city_patch")
+    if overlay_run_id != geometry["manifest"]["run_id"] or patch is None:
+        raise error("not_found", "Патч городской геометрии неактивен", 404)
+    return Response(json.dumps(patch["tileset"], ensure_ascii=False,
+                               separators=(",", ":")).encode("utf-8"),
+                    media_type="application/json",
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/v1/developer-overlay/{overlay_run_id}/city-patch/regions/{sha256}.json")
+def developer_city_patch_region(overlay_run_id: str, sha256: str) -> Response:
+    _, _, geometry = _active_developer_overlay()
+    if overlay_run_id != geometry["manifest"]["run_id"]:
+        raise error("not_found", "Патч городской геометрии неактивен", 404)
+    try:
+        content = developer_overlay.city_patch_bytes(geometry, "region", sha256)
+    except FileNotFoundError as exc:
+        raise error("not_found", "Патч городской геометрии отсутствует", 404) from exc
+    except (OSError, ValueError) as exc:
+        raise error("developer_overlay_unavailable",
+                    "Патч городской геометрии временно недоступен", 503) from exc
+    return Response(content, media_type="application/json",
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/v1/developer-overlay/{overlay_run_id}/city-patch/tiles/{sha256}.glb")
+def developer_city_patch_tile(overlay_run_id: str, sha256: str) -> Response:
+    _, _, geometry = _active_developer_overlay()
+    if overlay_run_id != geometry["manifest"]["run_id"]:
+        raise error("not_found", "Патч городской геометрии неактивен", 404)
+    try:
+        content = developer_overlay.city_patch_bytes(geometry, "tile", sha256)
+    except FileNotFoundError as exc:
+        raise error("not_found", "Плитка патча отсутствует", 404) from exc
+    except (OSError, ValueError) as exc:
+        raise error("developer_overlay_unavailable", "Плитка патча временно недоступна", 503) from exc
+    return Response(content, media_type="model/gltf-binary",
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate",
+                             "X-Content-Type-Options": "nosniff"})

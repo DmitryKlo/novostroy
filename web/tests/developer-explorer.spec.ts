@@ -68,7 +68,7 @@ test('selected house, floor and apartment have one-step Escape navigation and fo
       floor_number: 5, section_id: fixture.unit_detail.section_id, section_label: '2' } })
     return route.continue()
   })
-  await page.goto('/')
+  await page.goto('/?__map_test=1')
   await expect(page.locator('.header-location')).toHaveText(/Москва/)
   await expect(page.locator('.header-location svg')).toHaveCount(1)
   await page.getByRole('textbox', { name: 'Поиск зданий' }).fill('Лэйк')
@@ -90,9 +90,30 @@ test('selected house, floor and apartment have one-step Escape navigation and fo
     await expect(nearby).toHaveClass(/nearby-panel-compact/)
   }
   const opener = page.locator('.map-point-card-item > button').filter({ hasText: 'Этажи и квартиры' }).first()
+  const renderLoop = () => page.evaluate(() => (window as unknown as { __novoMapTest: { renderLoop: () => boolean } }).__novoMapTest.renderLoop())
+  const cityVolumes = () => page.evaluate(() => {
+    const map = (window as unknown as { __novoMapTest: {
+      selectedModelState: () => { cityVolumes: { loaded: boolean; shown: boolean }[] }
+      tileSelection: () => { url: string; selectedCount: number }[]
+    } }).__novoMapTest
+    return { loaded: map.selectedModelState().cityVolumes.some((tile) => tile.loaded),
+      visible: map.selectedModelState().cityVolumes.some((tile) => tile.loaded && tile.shown),
+      selectedTiles: map.tileSelection().filter((tile) => tile.url.includes('citywide') || tile.url.includes('/city-patch/')).reduce((sum, tile) => sum + tile.selectedCount, 0) }
+  })
+  const probeActive = () => page.evaluate(() => (window as unknown as { __novoMapTest: { adaptiveQuality: () => { probe: { active: boolean } } } }).__novoMapTest.adaptiveQuality().probe.active)
+  const resolutionScale = () => page.evaluate(() => (window as unknown as { __novoMapTest: { renderResolutionScale: () => number } }).__novoMapTest.renderResolutionScale())
+  await expect.poll(renderLoop).toBe(true)
+  const scaleBeforeExplorer = await resolutionScale()
+  try { await expect.poll(async () => (await cityVolumes()).loaded).toBe(true) }
+  catch (error) { console.log('city timeout before explorer', testInfo.project.name, await cityVolumes(), await page.evaluate(() => (window as unknown as { __novoMapTest: { adaptiveQuality: () => unknown; selectedModelState: () => unknown } }).__novoMapTest.adaptiveQuality()), await page.evaluate(() => (window as unknown as { __novoMapTest: { selectedModelState: () => unknown } }).__novoMapTest.selectedModelState())); throw error }
   await opener.click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
+  await expect.poll(renderLoop).toBe(true)
+  await expect.poll(probeActive).toBe(false)
+  await expect.poll(async () => (await resolutionScale()) < scaleBeforeExplorer).toBe(true)
+  try { await expect.poll(async () => { const state = await cityVolumes(); return state.visible && state.selectedTiles > 0 }).toBe(true) }
+  catch (error) { console.log('city timeout in explorer', testInfo.project.name, await cityVolumes(), await page.evaluate(() => (window as unknown as { __novoMapTest: { adaptiveQuality: () => unknown; selectedModelState: () => unknown; tileSelection: () => unknown } }).__novoMapTest.adaptiveQuality()), await page.evaluate(() => (window as unknown as { __novoMapTest: { selectedModelState: () => unknown; tileSelection: () => unknown } }).__novoMapTest.selectedModelState())); throw error }
   await expect(dialog.getByRole('heading', { name: /Клубный дом «Лэйк»/ })).toBeVisible()
   await expect(dialog.getByText('Секции и этажи')).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'К карте' })).toBeFocused()
@@ -108,6 +129,9 @@ test('selected house, floor and apartment have one-step Escape navigation and fo
   const floorButton = dialog.locator(`[data-floor-id="${floorFive.floor_id}"]`)
   await floorButton.click()
   await expect(dialog.getByRole('heading', { name: '5 этаж' })).toBeVisible()
+  await expect.poll(renderLoop).toBe(true)
+  await expect.poll(probeActive).toBe(false)
+  await expect.poll(async () => (await cityVolumes()).visible).toBe(true)
   await expect(dialog.getByText('Подтверждённой схемы расположения квартир')).toBeVisible()
   const unitButton = dialog.locator(`[data-unit-id="${fixture.unit_detail.unit_id}"]`)
   await unitButton.click()
@@ -127,6 +151,9 @@ test('selected house, floor and apartment have one-step Escape navigation and fo
   await expect(floorButton).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
+  await expect.poll(renderLoop).toBe(true)
+  await expect.poll(resolutionScale).toBe(scaleBeforeExplorer)
+  await expect.poll(async () => (await cityVolumes()).visible).toBe(true)
   await expect(opener).toBeFocused()
   expect(errors).toEqual([])
 })
@@ -202,7 +229,7 @@ test('price and floor filters keep the floor selector, unit list and detail on o
   await expect(dialog.locator('[data-floor-id]')).toHaveCount(1)
 })
 
-test('okrug and optional noise limit filter both house list and map, with dated modeled air and honest project media', async ({ page }) => {
+test('okrug, noise and air limits filter both house list and map, with dated modeled air and honest project media', async ({ page }) => {
   const query = '?query=%D0%9B%D1%8D%D0%B9%D0%BA'
   const [baseList, baseMap, basePoints] = await Promise.all([
     page.request.get(`/v1/registry/buildings${query}&limit=48&offset=0`).then((response) => response.json()),
@@ -214,19 +241,31 @@ test('okrug and optional noise limit filter both house list and map, with dated 
   const media = { media_id: 'media_bbbbbbbbbbbbbbbbbbbbbbbb', scope: 'project_gallery', role: 'project_rendering', label: 'Визуализация ЖК',
     observed_at: baseList.snapshot_at, asset_url: '/v1/developer-media/media_bbbbbbbbbbbbbbbbbbbbbbbb', availability: 'on_demand' }
   const known = { ...baseList.items[0], enrichment_run_id: enrichmentRun, okrug_id: okrug.id, okrug_name: okrug.name, district_name: 'Западное Дегунино',
+    developer_display_name: 'Тестовый девелопер', developer_display_basis: 'aggregator_asserted_unverified',
+    developer_legal_name: null, total_floors: 22, total_floors_basis: 'source_apartment_record_building_floors',
     noise_index: 35, air_quality: { status: 'modeled_forecast', label: 'Модельная оценка', pm2_5_ug_m3: 8.4, pm10_ug_m3: 17.2,
       no2_ug_m3: 12.1, valid_at: '2026-10-11T12:00:00Z', retrieved_at: '2026-10-11T10:00:00Z',
       spatial_scope: 'sampled_grid_cell_for_district', cell_resolution_km_approx: 11, stale: false,
-      measurement: false, measured_district_average: false, data_credit: 'Open-Meteo / CAMS Europe (CC BY 4.0)' }, media: [media] }
+      measurement: false, measured_district_average: false, data_credit: 'Open-Meteo / CAMS Europe (CC BY 4.0)',
+      internal_index: { status: 'modeled_forecast', value: 46, scale_id: 'internal_3pollutant_0_100_v1', higher_is_worse: true,
+        component_scores: { pm2_5: 20, pm10: 30, no2: 46 }, dominant_pollutants: ['no2'], official_index: false, measurement: false } }, media: [media] }
   const unknown = { ...known, registry_id: 'registry-test-unknown-noise', point_id: 'point-test-unknown-noise',
     name: `${known.name} · неизвестный шум`, noise_index: null, okrug_id: null, okrug_name: null,
+    total_floors: null, total_floors_basis: null, section_floor_counts: [
+      { section_label: '1', total_floors: 16, total_floors_basis: 'source_section_floor_count' },
+      { section_label: '2', total_floors: 10, total_floors_basis: 'source_section_floor_count' }],
     location: [known.location[0] + 0.001, known.location[1] + 0.001],
-    air_quality: { status: 'unavailable', reason: 'no_district' },
+    air_quality: { status: 'unavailable', reason: 'no_district', internal_index: { status: 'unavailable', value: null,
+      scale_id: 'internal_3pollutant_0_100_v1', higher_is_worse: true, component_scores: null, dominant_pollutants: [] } },
     media: [{ ...media, media_id: 'media_cccccccccccccccccccccccc', asset_url: '/v1/developer-media/media_cccccccccccccccccccccccc',
       scope: 'project_gallery_single_corpus', role: 'facade_photo', label: 'Фото ЖК' }] }
-  const point = { ...basePoints.items[0], enrichment_run_id: enrichmentRun, okrug_id: okrug.id, okrug_name: okrug.name, noise_index: 35, media: [media] }
+  const point = { ...basePoints.items[0], enrichment_run_id: enrichmentRun, okrug_id: okrug.id, okrug_name: okrug.name,
+    developer_display_name: known.developer_display_name, developer_display_basis: known.developer_display_basis,
+    total_floors: known.total_floors, total_floors_basis: known.total_floors_basis,
+    noise_index: 35, air_quality: known.air_quality, media: [media] }
   const pointUnknown = { ...point, registry_id: unknown.registry_id, point_id: unknown.point_id, name: unknown.name,
-    location: unknown.location, noise_index: null, okrug_id: null, okrug_name: null, media: unknown.media }
+    location: unknown.location, noise_index: null, air_quality: unknown.air_quality, okrug_id: null, okrug_name: null,
+    total_floors: null, total_floors_basis: null, section_floor_counts: unknown.section_floor_counts, media: unknown.media }
   const seen = new Set<string>()
   await page.route('**/v1/health', async (route) => {
     const original = await route.fetch()
@@ -246,24 +285,24 @@ test('okrug and optional noise limit filter both house list and map, with dated 
   await page.route('**/v1/registry/buildings**', async (route) => {
     const url = new URL(route.request().url())
     if (url.pathname !== '/v1/registry/buildings' || url.searchParams.get('query') !== 'Лэйк') return route.continue()
-    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index')
-    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); seen.add('list') }
+    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index') || url.searchParams.has('max_air_index')
+    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); expect(url.searchParams.get('max_air_index')).toBe('100'); seen.add('list') }
     return route.fulfill({ json: { ...baseList, enrichment_run_id: enrichmentRun, records_total: active ? 1 : 2, items: active ? [known] : [known, unknown],
       facets: { ...baseList.facets, okrugs: [okrug], noise_known_count: 1 } } })
   })
   await page.route('**/v1/registry/map**', async (route) => {
     const url = new URL(route.request().url())
     if (url.pathname !== '/v1/registry/map' || url.searchParams.get('query') !== 'Лэйк') return route.continue()
-    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index')
-    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); seen.add('map') }
+    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index') || url.searchParams.has('max_air_index')
+    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); expect(url.searchParams.get('max_air_index')).toBe('100'); seen.add('map') }
     return route.fulfill({ json: { ...baseMap, enrichment_run_id: enrichmentRun, items: active ? [known] : [known, unknown],
       counts: { ...baseMap.counts, records: active ? 1 : 2, geocoded: active ? 1 : 2 } } })
   })
   await page.route('**/v1/map/points**', async (route) => {
     const url = new URL(route.request().url())
     if (url.pathname !== '/v1/map/points' || url.searchParams.get('query') !== 'Лэйк') return route.continue()
-    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index')
-    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); seen.add('points') }
+    const active = url.searchParams.has('okrug_id') || url.searchParams.has('max_noise_index') || url.searchParams.has('max_air_index')
+    if (active) { expect(url.searchParams.get('okrug_id')).toBe(okrug.id); expect(url.searchParams.get('max_noise_index')).toBe('100'); expect(url.searchParams.get('max_air_index')).toBe('100'); seen.add('points') }
     return route.fulfill({ json: { ...basePoints, enrichment_run_id: enrichmentRun, items: active ? [point] : [point, pointUnknown],
       counts: { ...basePoints.counts, points: active ? 1 : 2, registry_points: active ? 1 : 2 },
       group_evidence: { ...basePoints.group_evidence, groups: [] } } })
@@ -281,14 +320,23 @@ test('okrug and optional noise limit filter both house list and map, with dated 
   expect(photoRequests).toBe(2)
   await expect.poll(() => page.getByRole('img', { name: 'Визуализация ЖК' }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
   await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Индекс шума: 35 из 100')
+  await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Индекс загрязнения воздуха: 46 из 100')
+  await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Застройщик по данным каталога: Тестовый девелопер')
+  await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Этажей в корпусе по источнику: 22')
   await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Модельная оценка: PM2.5 8,4 мкг/м³')
   await expect(page.getByTestId(`building-${known.registry_id}`)).toContainText('Open-Meteo / CAMS Europe (CC BY 4.0)')
   await expect(page.getByTestId(`building-${unknown.registry_id}`)).toContainText('Воздух: —')
+  await expect(page.getByTestId(`building-${unknown.registry_id}`)).toContainText('Индекс загрязнения воздуха: —')
+  await expect(page.getByTestId(`building-${unknown.registry_id}`)).toContainText('Этажность секций по источнику: 1 — 16, 2 — 10')
   await page.getByRole('combobox', { name: 'Административный округ' }).selectOption(okrug.id)
   await page.getByRole('checkbox', { name: 'Ограничить индекс шума' }).check()
+  await page.getByRole('checkbox', { name: 'Ограничить индекс загрязнения воздуха' }).check()
   await page.getByRole('button', { name: 'Показать дома' }).click()
   await expect(page.getByTestId(`building-${known.registry_id}`)).toBeVisible()
   await expect(page.getByTestId(`building-${unknown.registry_id}`)).toHaveCount(0)
   await expect(page.locator('.map-top')).toContainText('1 корпус')
+  await page.getByTestId(`building-${known.registry_id}`).locator('button').first().click()
+  await expect(page.locator('.map-point-card')).toContainText('Этажей в корпусе по источнику: 22')
+  await expect(page.locator('.map-point-card')).toContainText('Застройщик по данным каталога: Тестовый девелопер')
   expect(seen).toEqual(new Set(['list', 'map', 'points']))
 })

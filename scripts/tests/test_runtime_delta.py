@@ -202,3 +202,40 @@ def test_delta_export_rejects_a_source_bundle_from_a_different_commit(tmp_path: 
         export_delta(new, base, base_sha, tmp_path / "bad-delta",
                      source_commit="0"*40, source_bundle=tmp_path / "source.bundle")
     assert not (tmp_path / "bad-delta").exists()
+
+
+def test_v2_to_v3_delta_transports_complete_patch_and_keeps_base_city_immutable(tmp_path: Path):
+    from scripts.tests.test_runtime_overlay import stage_city_patch
+    source = tmp_path / "source"
+    _fixture(source)
+    (pointer_path, v3_pointer, _, _, _, _), _, _ = stage_city_patch(source)
+    v2_pointer = {key: value for key, value in v3_pointer.items() if not key.startswith("overlay_")}
+    v2_pointer["schema_version"] = "developer-experience-pointer/2"
+    pointer_path.write_text(json.dumps(v2_pointer))
+    plan, assets = make_plan(source, "full-compat")
+    base = apply_plan(source, tmp_path / "base", "full-compat", plan, assets)
+    before = snapshot(base)
+    base_sha = hashlib.sha256((base / "release-manifest.json").read_bytes()).hexdigest()
+    pointer_path.write_text(json.dumps(v3_pointer))
+    plan, assets = make_plan(source, "full-compat")
+    new = apply_plan(source, tmp_path / "new", "full-compat", plan, assets,
+                     base_release=base, base_manifest_sha256=base_sha)
+    commit, bundle = source_bundle(tmp_path)
+    delta = export_delta(new, base, base_sha, tmp_path / "delta",
+                         source_commit=commit, source_bundle=bundle)
+    sidecar = delta / "transport.json"
+    doc = json.loads(sidecar.read_text())
+    # Only the unified pointer and the complete new overlay are transferred.
+    new_overlay = [row for row in json.loads((new / "release-manifest.json").read_text())["files"]
+                   if row["path"].startswith("data/property/developer_overlay/")]
+    assert doc["delta"]["file_count"] == len(new_overlay) + 1
+    assert any(row["path"].endswith("/city-patch/pair-proof.jsonl") for row in new_overlay)
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    shutil.copytree(base, remote / "base")
+    imported = import_delta(delta / doc["archive"]["name"], sidecar, remote)
+    assert verify_release(imported)["file_count"] == len(plan)
+    assert snapshot(imported) == snapshot(new)
+    assert snapshot(base) == before == snapshot(remote / "base")
+    unchanged = "assets/public-citywide-v12/old-detail.glb"
+    assert (imported / unchanged).stat().st_ino == (remote / "base" / unchanged).stat().st_ino

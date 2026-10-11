@@ -11,11 +11,18 @@ import { api, RegistrySnapshotChanged, type DeveloperModel, type DeveloperParkWa
 import { coincidentPoints, groupMarkerId, pointAction, pointAddressCaption, pointComplexCardCaption, pointDeveloperCardCaption, pointDisplayMarkers, pointRegistryLinkCaption, unlocatedRegistryCount } from './mapPoints'
 import { expandGroupsForCameraHeight, groupMapPoints, mapPointDisplayItems } from './mapPointGroups'
 import { developerUnitFilterCount, developerUnitFilterSummary, emptyDeveloperUnitFilters, parseDeveloperUnitFilters, selectedDeveloperUnitCriteria, type DeveloperUnitFilterDraft } from './developerUnitFilters'
+import { developerDisplayCaption, developerFloorsCaption } from './developerBuildingFacts'
+import { loadDeveloperOverlayViewport, type DeveloperOverlayViewport } from './developerOverlayApi'
 import { boundedNearbyBbox, NearbyCache, nearbyKey, nearbyViewportKey, NEARBY_CATEGORIES, noNearbyLayers, shownNearbyItems, validNearbyResult, validNearbyViewport, type NearbyVisibility } from './nearby'
 
 const PAGE_SIZE = 48
 const number = (value: number) => new Intl.NumberFormat('ru-RU').format(value)
 const known = (value: string | number | null | undefined) => value === null || value === undefined || value === '' ? 'Не указано' : String(value)
+const selectedModelCaption = (model: DeveloperModel) => model.facade_style_basis === 'project_style_inference'
+  ? 'Реконструкция фасада по изображениям ЖК; высота оценочная.'
+  : model.photo_facade_reconstruction
+    ? 'Реконструкция фасада по фото без подтверждённой ориентации; высота оценочная.'
+    : 'Реконструкция: схематический объём по контуру и этажности; высота оценочная.'
 const snapshotDate = (value: string | null | undefined) => {
   if (!value) return 'дата не указана'
   const parsed = new Date(value)
@@ -40,6 +47,11 @@ const airQualityCaption = (air: RegistryBuilding['air_quality']) => {
 }
 const noiseCaption = (value: number | null | undefined) => value !== null && value !== undefined && Number.isInteger(value) && value >= 0 && value <= 100
   ? `${value} из 100` : '—'
+const airIndexCaption = (air: RegistryBuilding['air_quality']) => {
+  const index = air?.internal_index
+  return index?.status === 'modeled_forecast' && Number.isInteger(index.value) && index.value !== null && index.value >= 0 && index.value <= 100
+    ? `${index.value} из 100 · Внутренняя оценка платформы; выше — хуже` : '—'
+}
 const WALK_LIMITS = [5, 10, 15, 20, 30, 45, 60]
 
 function WalkFilter({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
@@ -55,7 +67,7 @@ function BuildingCard({ item, selected, onSelect, developerMode, parkCaption, pa
       <span className="registry-card-kicker"><Building2 size={15} /> {developerMode ? 'Корпус из каталога квартир' : kindLabel(item.record_kind)}</span>
       <strong className="registry-card-title">{item.name}</strong>
       <span className="registry-card-address"><MapPin size={14} /> {known(item.address)}{developerMode && item.address_complete === false ? ' · частичный адрес' : ''}</span>
-      {developerMode ? <span className="registry-card-source-facts"><span>ЖК: {known(item.complex_label)}</span><span>Застройщик: {known(item.developer_name)}</span><span>Округ: {item.okrug_name || '—'} · район: {item.district_name || '—'}</span><span>Индекс шума: {noiseCaption(item.noise_index)} · Внутренняя оценка платформы</span><span>Воздух: {airQualityCaption(item.air_quality)}</span>{item.matching_units_count != null && <span>Квартир, подходящих под фильтры: {number(item.matching_units_count)}</span>}</span>
+      {developerMode ? <span className="registry-card-source-facts"><span>ЖК: {known(item.complex_label)}</span><span>{developerDisplayCaption(item)}</span><span>{developerFloorsCaption(item)}</span><span>Округ: {item.okrug_name || '—'} · район: {item.district_name || '—'}</span><span>Индекс шума: {noiseCaption(item.noise_index)} · Внутренняя оценка платформы</span><span>Индекс загрязнения воздуха: {airIndexCaption(item.air_quality)}</span><span>Воздух: {airQualityCaption(item.air_quality)}</span>{item.matching_units_count != null && <span>Квартир, подходящих под фильтры: {number(item.matching_units_count)}</span>}</span>
         : <span className="registry-card-facts"><span><small>Статус по выгрузке</small><b>{known(item.status)}</b></span><span><small>Срок сдачи по выгрузке</small><b>{known(item.handover)}</b></span><span><small>Этажность</small><b>{item.floors == null ? 'Не указана' : `${item.floors} эт.`}</b></span></span>}
       {parkCaption && !parkError && <span className="registry-card-park">{parkCaption}</span>}
       <span className="registry-card-foot"><span>{validLocation(item) ? 'Точка корпуса подтверждена' : 'Точка корпуса не подтверждена'}</span><span>Сведения: {snapshotDate(developerMode ? item.observed_at : item.latest_known_date)}</span></span>
@@ -97,6 +109,7 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const [parkWalkErrorId, setParkWalkErrorId] = useState<string | null>(null)
   const [parkRetry, setParkRetry] = useState(0)
   const [selectedModelVisible, setSelectedModelVisible] = useState(false)
+  const [selectedOverlayStyleVisible, setSelectedOverlayStyleVisible] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [expandGroupsNear, setExpandGroupsNear] = useState(true)
   const [focusOnSelection, setFocusOnSelection] = useState(false)
@@ -113,6 +126,8 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const [nearbyError, setNearbyError] = useState<string | null>(null)
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null)
   const [viewportBbox, setViewportBbox] = useState<[number, number, number, number] | null>(null)
+  const [overlayBbox, setOverlayBbox] = useState<[number, number, number, number] | null>(null)
+  const [overlayViewport, setOverlayViewport] = useState<DeveloperOverlayViewport | null>(null)
   const [viewportResult, setViewportResult] = useState<{ key: string; data: NearbyViewport } | null>(null)
   const [viewportLoading, setViewportLoading] = useState(false)
   const [viewportError, setViewportError] = useState<string | null>(null)
@@ -164,7 +179,34 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const nearbySnapshot = points?.registry_snapshot_id ?? null
   const nearbyMapRun = developerMode ? points?.map_run_id ?? null : points?.model_run_id ?? null
   const nearbyAnyVisible = nearbyVisibility.metro || nearbyVisibility.education || nearbyVisibility.medical
-  const mapVisible = active && view === 'catalog' && !explorerBuilding && (!mobile || mobilePanel === 'map')
+  const mapVisible = active && view === 'catalog' && (!mobile || mobilePanel === 'map')
+  const overlayIdentityReady = developerMode && mapVisible && Boolean(overlayBbox && list && map && points
+    && health.registry_snapshot_id && health.map_run_id && health.unit_run_id && health.enrichment_run_id && health.overlay_run_id
+    && list.overlay_run_id === health.overlay_run_id && map.overlay_run_id === health.overlay_run_id
+    && points.overlay_run_id === health.overlay_run_id)
+  const overlayRequestKey = overlayIdentityReady ? JSON.stringify([overlayBbox, appliedKey, health.overlay_run_id]) : null
+  useEffect(() => {
+    if (!overlayRequestKey || !overlayBbox || !health.registry_snapshot_id || !health.map_run_id
+      || !health.unit_run_id || !health.enrichment_run_id || !health.overlay_run_id) {
+      setOverlayViewport(null)
+      return
+    }
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void loadDeveloperOverlayViewport(overlayBbox, applied, {
+        registry_snapshot_id: health.registry_snapshot_id!, map_run_id: health.map_run_id!,
+        unit_run_id: health.unit_run_id!, enrichment_run_id: health.enrichment_run_id!,
+        overlay_run_id: health.overlay_run_id!,
+      }, controller.signal).then((result) => {
+        if (!controller.signal.aborted) setOverlayViewport(result)
+      }).catch((reason) => {
+        if (controller.signal.aborted) return
+        setOverlayViewport(null)
+        console.warn('Геометрия домов временно недоступна', reason)
+      })
+    }, 180)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [overlayRequestKey])
   const modelRegistryId = selected?.registry_id ?? (selectedPoint?.point_type === 'developer_building' ? selectedPoint.registry_id : null)
   useEffect(() => {
     setSelectedModel(null)
@@ -373,7 +415,8 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
   const nearbyData = activeNearbyKey && nearbyResult?.key === activeNearbyKey ? nearbyResult.data : null
   const activeUnitFilterSummary = developerMode ? [developerUnitFilterSummary(applied),
     applied.okrug_id ? `округ ${list?.facets?.okrugs?.find((okrug) => okrug.id === applied.okrug_id)?.name ?? selected?.okrug_name ?? 'выбранный'}` : null,
-    applied.max_noise_index !== undefined ? `индекс шума до ${applied.max_noise_index} из 100` : null].filter(Boolean).join(' · ') || null : null
+    applied.max_noise_index !== undefined ? `индекс шума до ${applied.max_noise_index} из 100` : null,
+    applied.max_air_index !== undefined ? `индекс загрязнения до ${applied.max_air_index} из 100` : null].filter(Boolean).join(' · ') || null : null
   const selectedParkError = !!selected && parkWalkErrorId === selected.registry_id
   const selectedParkCaption = developerMode && selected
     ? parkWalkCaption(parkWalk?.registry_id === selected.registry_id ? parkWalk : null, parkWalkLoading, selectedParkError) : null
@@ -416,11 +459,14 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
         <div className="sidebar-content"><section className="results">{selected && !selectedPoint && <p className="nearby-no-origin">Для этой записи нет подтверждённой точки. Объекты рядом и пешие маршруты не рассчитаны.</p>}<div className="section-heading"><div><span className="section-kicker">{selected ? 'ЗАПИСЬ РЕЕСТРА' : developerMode ? 'ДОМА ИЗ КАТАЛОГА КВАРТИР' : 'КАТАЛОГ ЗДАНИЙ'}</span><h2>{selected ? selected.name : developerMode ? 'Дома с найденными квартирами' : 'Новостройки и корпуса'}</h2></div><span className="count-badge">{selected ? 1 : list ? `${number(list.items.length)} из ${number(list.records_total)}` : '—'}</span></div>{selected ? <div className="registry-selection-note"><span>{developerMode ? 'Текущее наличие и цены не подтверждены' : 'Цены и квартиры не представлены'}</span>{developerMode && <button type="button" className="developer-explorer-launch" data-testid="open-developer-explorer" onClick={(event) => openDeveloperExplorer(selected, event.currentTarget)}>Этажи и квартиры</button>}{!developerMode && <a href={`/models?decision=&registry_id=${encodeURIComponent(selected.registry_id)}`} onClick={(event) => { if (onModels && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onModels(selected.registry_id) } }}>Проверить модели</a>}<button onClick={closeSelection} aria-label="Показать все здания"><X size={16} /></button></div> : points && <p className="result-count-note">На карте {number(points.counts.points)} записей с координатами{unlocated !== null ? `; ${number(unlocated)} записей реестра без подтверждённой точки` : ''}. {developerMode ? 'Точки относятся только к подтверждённым корпусам из этого снимка.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p>}{loading ? <div className="loading-list" role="status">Загружаем здания…<span className="loading-bar" /></div> : shown.length ? <div className="registry-list">{shown.map((item) => <BuildingCard key={item.registry_id} item={item} selected={selected?.registry_id === item.registry_id} onSelect={() => select(item)} developerMode={developerMode} parkCaption={selected?.registry_id === item.registry_id ? selectedParkCaption ?? undefined : undefined} parkError={selected?.registry_id === item.registry_id && selectedParkError} onRetryPark={retryParkWalk} />)}{!selected && list && list.items.length < list.records_total && <button className="registry-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button>}</div> : <div className="empty-state"><Compass size={29} /><strong>Здания в реестре не найдены</strong><p>Измените запрос или фильтры. {developerMode ? 'На карте нет других корпусов для этого запроса.' : 'Картографические стройки не подтверждают связь с ЖК.'}</p><button className="primary-button" onClick={clear}>Сбросить фильтры</button></div>}</section></div>
       </aside>
       <main className={`map-column ${mobilePanel === 'results' ? 'mobile-hide' : ''}${developerMode ? ' developer-map-mode' : ''}${selectedPoint || selectedGroup ? ' has-map-selection' : ''}`}>
-        <MapView data={mapData} selectedId={selectedMarkerId} selectionRequestId={selectionRequestId} focusOnSelection={focusOnSelection} visible={mapVisible} selectedModel={selectedMarkerId && selectedModel?.registry_id === modelRegistryId ? selectedModel : null} onSelectedModelVisible={setSelectedModelVisible}
+        <MapView data={mapData} overlay={overlayViewport} selectedId={selectedMarkerId} selectionRequestId={selectionRequestId} focusOnSelection={focusOnSelection} visible={mapVisible} experienceOpen={Boolean(explorerBuilding)} selectedModel={selectedMarkerId && selectedModel?.registry_id === modelRegistryId ? selectedModel : null} onSelectedModelVisible={setSelectedModelVisible} onSelectedOverlayStyleVisible={setSelectedOverlayStyleVisible}
           markerLabel={points ? `${number(points.counts.points)} записей с координатами${unlocated !== null ? ` · ${number(unlocated)} записей реестра без точки` : ''}${!developerMode && points.counts.excluded_mapped_by_registry_filters ? ` · ${number(points.counts.excluded_mapped_by_registry_filters)} картографических строек исключено фильтром статуса/типа` : ''}` : 'Точки с подтверждёнными координатами'}
           nearbyItems={nearbyItems} selectedPoiId={selectedPoiId} onSelectNearby={setSelectedPoiId}
           onMarkerScale={(height) => setExpandGroupsNear((current) => expandGroupsForCameraHeight(current, height))}
-          onViewport={(bbox) => setViewportBbox((current) => { const next = boundedNearbyBbox(bbox); return JSON.stringify(current) === JSON.stringify(next) ? current : next })}
+          onViewport={(bbox) => {
+            setViewportBbox((current) => { const next = boundedNearbyBbox(bbox); return JSON.stringify(current) === JSON.stringify(next) ? current : next })
+            setOverlayBbox((current) => { const next = bbox && bbox[2] - bbox[0] <= 10 && bbox[3] - bbox[1] <= 10 ? bbox : null; return JSON.stringify(current) === JSON.stringify(next) ? current : next })
+          }}
           onSelect={selectMarker} onStatus={setMapStatus} />
         <NearbyPanel selectedName={selectedPoint?.name ?? selected?.name ?? null} selectedHasPoint={Boolean(selectedPoint)}
           visible={nearbyVisibility} onToggle={toggleNearby} education={nearbyEducation}
@@ -432,7 +478,7 @@ export default function RegistryApp({ health, active = true, routeView = 'catalo
         {selectedGroup && !selectedPoint && <div className="map-selection map-point-card"><div className="map-point-card-head"><strong>{selectedGroup.group_label} · {number(selectedGroup.member_count)} записей</strong><button type="button" onClick={closeSelection} aria-label="Закрыть группу ЖК"><X size={15} /></button></div><p>{developerMode ? 'Группа ЖК по подтверждённому общему идентификатору. Каждый корпус остаётся отдельной записью.' : 'Группа по подтверждённому общему идентификатору. Каждая стройка остаётся отдельной записью; выберите точку на карте или ниже.'}</p><div className="map-point-card-items">{selectedGroup.members.slice(0, 12).map((point) => <div className="map-point-card-item" key={point.point_id}><span><strong>{point.name}</strong><small>{pointAddressCaption(point)}</small>{pointDeveloperCardCaption(point) && <small>{pointDeveloperCardCaption(point)}</small>}</span><button type="button" onClick={() => selectMarker(point.point_id)}>Показать точку</button></div>)}</div>{selectedGroup.member_count > 12 && <p>На карте показаны ещё {number(selectedGroup.member_count - 12)} записей.</p>}</div>}
         {selectedPoint && <div className={`map-selection map-point-card ${selectedParkCaption ? 'map-point-card-with-park' : ''}`}> <div className="map-point-card-head"><strong>{coincident.length > 1 ? `${coincident.length} записи в одной точке` : selectedPoint.name}</strong><button type="button" onClick={closeSelection} aria-label="Закрыть сведения о точке"><X size={15} /></button></div>
           <div className="map-point-card-items">{coincident.map((point) => <div className="map-point-card-item" key={point.point_id}>
-            <span><b>{point.point_type === 'developer_building' ? 'Корпус из каталога квартир' : point.point_type === 'registry' ? 'Запись реестра' : 'Строящийся объект на карте'}</b>{coincident.length > 1 && <strong>{point.name}</strong>}<small>{pointAddressCaption(point)}</small><small className="map-point-complex">{pointComplexCardCaption(point, selectedPointGroup)}</small>{pointDeveloperCardCaption(point) && <small>{pointDeveloperCardCaption(point)}</small>}{pointRegistryLinkCaption(point, selectedPointGroup) && <small>{pointRegistryLinkCaption(point, selectedPointGroup)}</small>}<small>{point.point_type === 'developer_building' ? `Сведения: ${snapshotDate(point.observed_at)}` : point.point_type === 'registry' ? `Сведения: ${snapshotDate(point.latest_known_date)}` : `Контур: ${snapshotDate(point.geometry_as_of)}`}</small>{selectedModelVisible && selectedModel?.registry_id === point.registry_id && <small className="selected-model-caption">Реконструкция: {selectedModel.photo_facade_reconstruction ? 'фасад по фото без подтверждённой ориентации' : 'схематический объём по контуру и этажности'}; высота оценочная.</small>}</span>
+            <span><b>{point.point_type === 'developer_building' ? 'Корпус из каталога квартир' : point.point_type === 'registry' ? 'Запись реестра' : 'Строящийся объект на карте'}</b>{coincident.length > 1 && <strong>{point.name}</strong>}<small>{pointAddressCaption(point)}</small><small className="map-point-complex">{pointComplexCardCaption(point, selectedPointGroup)}</small>{pointDeveloperCardCaption(point) && <small>{pointDeveloperCardCaption(point)}</small>}{point.point_type === 'developer_building' && <small>{developerFloorsCaption(point)}</small>}{point.point_type === 'developer_building' && <small>Индекс загрязнения воздуха: {airIndexCaption(point.air_quality)}</small>}{pointRegistryLinkCaption(point, selectedPointGroup) && <small>{pointRegistryLinkCaption(point, selectedPointGroup)}</small>}<small>{point.point_type === 'developer_building' ? `Сведения: ${snapshotDate(point.observed_at)}` : point.point_type === 'registry' ? `Сведения: ${snapshotDate(point.latest_known_date)}` : `Контур: ${snapshotDate(point.geometry_as_of)}`}</small>{(selectedModelVisible || selectedOverlayStyleVisible || selectedModel?.facade_style_basis === 'project_style_inference') && selectedModel?.registry_id === point.registry_id && <small className="selected-model-caption">{selectedModelCaption(selectedModel)}</small>}</span>
             {point.point_type !== 'mapped_construction' ? <button type="button" onClick={(event) => openRegistryPoint(point, point.point_type === 'developer_building', event.currentTarget)}>{point.point_type === 'developer_building' ? 'Этажи и квартиры' : 'Сведения'}</button>
               : <a href={`/models?decision=ready&candidate=${encodeURIComponent(point.candidate_id)}`} onClick={(event) => { if (onModels && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onModels(undefined, point.candidate_id) } }}>Оценка модели</a>}
           </div>)}</div>
